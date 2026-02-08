@@ -1,0 +1,10 @@
+.env
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+.eggs/
+learned_params.json
+portfolio_state.json
+portfolio_log.csv

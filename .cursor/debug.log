@@ -1,0 +1,2 @@
+{"hypothesisId": "H1", "location": "portfolio_log.py:record", "message": "record entry types", "data": {"type_doge": "Decimal", "type_usd": "Decimal", "type_price": "float"}, "timestamp": 1770525514106}
+{"hypothesisId": "H1", "location": "portfolio_log.py:record", "message": "record entry types", "data": {"type_doge": "Decimal", "type_usd": "Decimal", "type_price": "float"}, "timestamp": 1770525574962}
