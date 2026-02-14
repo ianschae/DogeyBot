@@ -110,6 +110,7 @@ def run_learn(days: int = LEARN_DAYS, logger=None) -> Optional[tuple[int, int, f
             path = Path(__file__).resolve().parent.parent / "learned_params.json"
             with open(path, "w") as f:
                 json.dump(out, f, indent=2)
+            config.secure_file(path)
             if logger:
                 logger.info("Found a profitable combo: buy when RSI < %s, sell when RSI > %s → %s%%, %s trades.", best_entry, best_exit, f"{best_return:.2f}", best_trades)
                 logger.info("Saved settings to %s.", path)

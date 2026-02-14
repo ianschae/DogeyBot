@@ -82,6 +82,7 @@ def _write_status(
                 "dry_run": config.DRY_RUN,
                 "allow_live": config.ALLOW_LIVE,
             }, f, indent=2)
+        config.secure_file(config.STATUS_FILE)
     except OSError as e:
         logger.debug("Could not write status file: %s", e)
 

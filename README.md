@@ -28,9 +28,9 @@ Simple Dogecoin (DOGE-USD) trading bot for Coinbase Advanced Trade. Plug in your
    python -m src.main
    ```
 
-   Everything runs from main by default: learning (backtest on startup and every 24h), the trading loop (every 60s), and the terminal UI. The bot fetches DOGE-USD candles and your balance, then either logs what it would do (dry-run) or places market orders. Stop with Ctrl+C.
+   Everything runs from main by default: learning (backtest on startup and every 24h), the trading loop (every 60s), and the GUI. The bot fetches DOGE-USD candles and your balance, then either logs what it would do (dry-run) or places market orders. Stop with Ctrl+C.
 
-   **GUI:** A doge-game style window shows score, DOGE/USD, RSI, last move, and next-check countdown. Set `UI_ENABLED=false` in `.env` to disable.
+   **GUI:** A doge-game style window with a big portfolio score, stat blocks (DOGE, USD, gain, last move), RSI and next-check progress bars, and optional images. Add **dogey.png** (and optionally **dogecoin.png**) in `src/assets/` for the main graphic and the click-to-spawn coins; click **"Much click. Wow coins."** to make coins fall from the top. Set `UI_ENABLED=false` in `.env` to run without the window.
 
 Run tests: `pytest tests/`
 
@@ -49,7 +49,15 @@ The bot **learns in real time** from main: on startup it backtests the last 60 d
 
 ## Data
 
-The bot writes `portfolio_state.json` (initial value when tracking started) and `portfolio_log.csv` (one row per tick: timestamp_utc, usd, doge, price, portfolio_value_usd, gain_usd, gain_pct). The CSV grows by about one row per poll (e.g. ~1440 rows per day at 60s). For long-running 24/7 use, archive or trim the file periodically if needed.
+The bot writes `portfolio_state.json` (initial value when tracking started), `portfolio_log.csv` (one row per tick: timestamp_utc, usd, doge, price, portfolio_value_usd, gain_usd, gain_pct), and `status.json` (current snapshot for the GUI). The CSV grows by about one row per poll (e.g. ~1440 rows per day at 60s). For long-running 24/7 use, archive or trim the file periodically if needed.
+
+## Security
+
+- **Secrets**: API key and secret are read only from the environment (e.g. `.env`). Never commit `.env`; it is in `.gitignore`. Use `.env.example` as a template with no real values.
+- **API key scope**: Create keys with **view** and **trade** only. Do **not** enable transfer or withdraw.
+- **Files**: On Unix, generated files (`status.json`, `portfolio_state.json`, `portfolio_log.csv`, `learned_params.json`) are restricted to owner read/write (mode `0o600`) after each write. Restrict `.env` yourself if desired: `chmod 600 .env`.
+- **Logs**: Log output may include balances and portfolio value; protect log files and terminal output if you consider that sensitive.
+- **Dependencies**: Run `pip install -r requirements.txt` from a venv and periodically check for known vulnerabilities, e.g. `pip install pip-audit && pip-audit`.
 
 ## Running 24/7
 

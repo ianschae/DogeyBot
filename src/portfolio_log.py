@@ -4,6 +4,8 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 
+from . import config
+
 STATE_FILE = Path(__file__).resolve().parent.parent / "portfolio_state.json"
 LOG_FILE = Path(__file__).resolve().parent.parent / "portfolio_log.csv"
 CSV_HEADER = ("timestamp_utc", "usd", "doge", "price", "portfolio_value_usd", "gain_usd", "gain_pct")
@@ -25,6 +27,7 @@ def _ensure_state(portfolio_value_usd: float) -> float:
             "initial_portfolio_value_usd": initial,
             "started_at": datetime.now(timezone.utc).isoformat(),
         }, f, indent=2)
+    config.secure_file(STATE_FILE)
     return initial
 
 
@@ -48,4 +51,5 @@ def record(doge: float, usd: float, price: float) -> tuple[float, float, float]:
         if write_header:
             w.writerow(CSV_HEADER)
         w.writerow((now, f"{usd:.2f}", f"{doge:.8f}", f"{price:.6f}", f"{portfolio_value:.2f}", f"{gain_usd:.2f}", f"{gain_pct:.2f}"))
+    config.secure_file(LOG_FILE)
     return portfolio_value, gain_usd, gain_pct

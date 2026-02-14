@@ -40,6 +40,8 @@ if _LEARNED_PARAMS_PATH.exists():
         RSI_PARAMS_SOURCE = "learned_params.json"
     except (json.JSONDecodeError, OSError):
         pass
+
+
 def _int_env(name: str, default: int) -> int:
     try:
         return int(os.environ.get(name, str(default)).strip())
@@ -74,3 +76,11 @@ LEARN_FEE_PCT = _float_env("LEARN_FEE_PCT", 0.0)
 # Optional: GUI (doge-game window; tkinter)
 UI_ENABLED = os.environ.get("UI_ENABLED", "true").strip().lower() in ("true", "1", "yes")
 STATUS_FILE = Path(__file__).resolve().parent.parent / "status.json"
+
+
+def secure_file(path: Path) -> None:
+    """Restrict file to owner read/write only (0o600). No-op on failure (e.g. Windows)."""
+    try:
+        os.chmod(path, 0o600)
+    except OSError:
+        pass

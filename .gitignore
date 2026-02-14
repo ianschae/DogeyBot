@@ -1,11 +1,26 @@
+# Secrets and local config
 .env
+
+# Python
 __pycache__/
 *.pyc
 .venv/
 venv/
 *.egg-info/
 .eggs/
+
+# Runtime / generated (not needed to run after clone)
 learned_params.json
 portfolio_state.json
 portfolio_log.csv
 status.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Tools
+.pytest_cache/
+.coverage
+htmlcov/
+*.egg
