@@ -306,10 +306,10 @@ def run_gui(shutdown_event) -> None:
 
     stats_f = tk.Frame(root, bg=bg)
     stats_f.pack(fill=tk.X, pady=(0, pad_lg))
-    for col in range(4):
+    for col in range(5):
         stats_f.columnconfigure(col, weight=1)
-    stat_names = ("many DOGE", "such USD", "very gain", "wow move")
-    stat_keys = ("doge", "usd", "gain", "move")
+    stat_names = ("many DOGE", "such USD", "very gain", "wow move", "such price")
+    stat_keys = ("doge", "usd", "gain", "move", "price")
     stat_labels = {}
     for col, (name, key) in enumerate(zip(stat_names, stat_keys)):
         f = tk.Frame(stats_f, bg=card_bg, relief=tk.FLAT, borderwidth=0, padx=pad_md, pady=pad_md)
@@ -460,6 +460,8 @@ def run_gui(shutdown_event) -> None:
         gain_text = f"${fmt(gu)} ({fmt(gp)}%)"
         stat_labels["gain"].config(text=gain_text, fg=fg_success if gp > 0 else fg_danger if gp < 0 else fg_primary)
         stat_labels["move"].config(text=move_text, fg=fg_success if sig == "buy" else fg_danger if sig == "sell" else fg_accent)
+        price_val = s.get("price")
+        stat_labels["price"].config(text=f"${fmt(price_val)}" if price_val not in (None, 0) else "—")
         peak_val = s.get("peak_usd") or 0
         days_val = s.get("days_tracked") or 0
         avg_val = s.get("avg_daily_gain_pct") or 0
@@ -507,7 +509,7 @@ def run_gui(shutdown_event) -> None:
             party_label.pack(pady=(4, 2))
         else:
             party_label.pack_forget()
-        root.after(1000, update_gui)
+        root.after(10000, update_gui)
 
     root.after(500, update_gui)
 

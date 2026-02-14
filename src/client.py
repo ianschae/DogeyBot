@@ -71,6 +71,27 @@ def get_doge_and_usd_balances() -> tuple[Decimal, Decimal]:
     return doge, usd
 
 
+def get_current_price() -> float | None:
+    """Fetch current DOGE-USD price from the product endpoint. Returns None on failure."""
+    client = _client()
+
+    def _fetch():
+        return client.get_product(product_id=config.PRODUCT_ID)
+
+    try:
+        resp = _retry(_fetch)
+    except Exception as e:
+        logger.debug("Couldn't fetch current price: %s", e)
+        return None
+    price = getattr(resp, "price", None) if not isinstance(resp, dict) else resp.get("price")
+    if price is None:
+        return None
+    try:
+        return float(str(price))
+    except (TypeError, ValueError):
+        return None
+
+
 def get_closed_candles(count: int = None) -> list[dict]:
     """Fetch DOGE-USD candles and return only closed ones, sorted ascending by time.
     Returns list of dicts with keys: start, open, high, low, close, volume.

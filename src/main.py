@@ -132,16 +132,20 @@ def _bot_loop(strategy: RSIMeanReversion) -> None:
             portfolio_value = gain_usd = gain_pct = 0.0
             peak = drawdown_pct = days_tracked = avg_daily_gain_pct = avg_daily_gain_usd = 0.0
             try:
-                price = float(candles[-1].get("close", 0))
+                candle_price = float(candles[-1].get("close", 0))
             except (TypeError, ValueError):
-                price = 0.0
-            if price <= 0:
+                candle_price = 0.0
+            if candle_price <= 0:
                 logger.warning("Invalid or missing close price; skipping this round.")
                 _sleep_until_shutdown(config.POLL_INTERVAL_SECONDS)
                 continue
+            # Use current product price for display; fall back to candle close if API fails
+            display_price = client.get_current_price()
+            if display_price is None or display_price <= 0:
+                display_price = candle_price
             try:
                 (portfolio_value, gain_usd, gain_pct, peak, drawdown_pct,
-                 days_tracked, avg_daily_gain_pct, avg_daily_gain_usd) = portfolio_log.record(doge, usd, price)
+                 days_tracked, avg_daily_gain_pct, avg_daily_gain_usd) = portfolio_log.record(doge, usd, candle_price)
                 logger.info("Balance: %s DOGE, %s USD. Holding DOGE: %s.", doge, usd, in_position)
                 logger.info("Portfolio: $%.2f (gain $%.2f / %s%%); peak $%.2f; %s days; avg daily %s%% / $%.2f.",
                     portfolio_value, gain_usd, f"{gain_pct:.2f}", peak, f"{days_tracked:.1f}", f"{avg_daily_gain_pct:.2f}", avg_daily_gain_usd)
@@ -154,7 +158,7 @@ def _bot_loop(strategy: RSIMeanReversion) -> None:
             _write_status(
                 float(doge), float(usd), in_position, sig,
                 portfolio_value, gain_usd, gain_pct, peak, drawdown_pct, days_tracked, avg_daily_gain_pct, avg_daily_gain_usd,
-                price, candles, strategy.period,
+                display_price, candles, strategy.period,
                 strategy.entry, strategy.exit, last_learn_time,
             )
             logger.info("Next check in %s seconds.", config.POLL_INTERVAL_SECONDS)
