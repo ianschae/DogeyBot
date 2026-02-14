@@ -117,6 +117,10 @@ def _bot_loop(strategy: RSIMeanReversion) -> None:
                 price = float(candles[-1].get("close", 0))
             except (TypeError, ValueError):
                 price = 0.0
+            if price <= 0:
+                logger.warning("Invalid or missing close price; skipping this round.")
+                _sleep_until_shutdown(config.POLL_INTERVAL_SECONDS)
+                continue
             try:
                 portfolio_value, gain_usd, gain_pct = portfolio_log.record(doge, usd, price)
                 logger.info("Balance: %s DOGE, %s USD. Holding DOGE: %s.", doge, usd, in_position)

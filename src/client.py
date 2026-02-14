@@ -1,5 +1,6 @@
 """Thin wrapper around Coinbase REST client for DOGE-USD."""
 import logging
+import os
 import time
 from decimal import Decimal
 
@@ -154,10 +155,15 @@ def get_candles_range(start_ts: int, end_ts: int, granularity: str = "SIX_HOUR")
     return out
 
 
+def _order_id() -> str:
+    """Unique order id to avoid exchange rejections from collision."""
+    return f"doge-bot-{int(time.time() * 1000)}-{os.urandom(4).hex()}"
+
+
 def market_buy_usd(quote_size_usd: str | Decimal) -> None:
     """Place market buy for DOGE using quote_size in USD (DOGE-USD pair)."""
     client = _client()
-    client_order_id = f"doge-bot-{int(time.time() * 1000)}"
+    client_order_id = _order_id()
     client.market_order_buy(
         client_order_id=client_order_id,
         product_id=config.PRODUCT_ID,
@@ -169,7 +175,7 @@ def market_buy_usd(quote_size_usd: str | Decimal) -> None:
 def market_sell_doge(base_size_doge: str | Decimal) -> None:
     """Place market sell for DOGE (base_size in DOGE)."""
     client = _client()
-    client_order_id = f"doge-bot-{int(time.time() * 1000)}"
+    client_order_id = _order_id()
     client.market_order_sell(
         client_order_id=client_order_id,
         product_id=config.PRODUCT_ID,

@@ -53,6 +53,7 @@ def run(
             _last_order_time = now
         except Exception as e:
             logger.exception("Buy failed: %s", e)
+            _last_order_time = now  # cooldown before retry to avoid hammering API
         return
     if signal == "sell":
         doge_available = _round_down_doge(doge_balance)
@@ -71,3 +72,4 @@ def run(
             _last_order_time = now
         except Exception as e:
             logger.exception("Sell failed: %s", e)
+            _last_order_time = now  # cooldown before retry to avoid hammering API

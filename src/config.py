@@ -31,13 +31,15 @@ if _LEARNED_PARAMS_PATH.exists():
     try:
         with open(_LEARNED_PARAMS_PATH) as f:
             learned = json.load(f)
-        if isinstance(learned.get("RSI_PERIOD"), int):
-            RSI_PERIOD = learned["RSI_PERIOD"]
-        if isinstance(learned.get("RSI_ENTRY"), int):
-            RSI_ENTRY = learned["RSI_ENTRY"]
-        if isinstance(learned.get("RSI_EXIT"), int):
-            RSI_EXIT = learned["RSI_EXIT"]
-        RSI_PARAMS_SOURCE = "learned_params.json"
+        p = learned.get("RSI_PERIOD")
+        e = learned.get("RSI_ENTRY")
+        x = learned.get("RSI_EXIT")
+        if isinstance(p, int) and 1 <= p <= 100:
+            RSI_PERIOD = p
+        if isinstance(e, int) and isinstance(x, int) and 1 <= e < x <= 100:
+            RSI_ENTRY = e
+            RSI_EXIT = x
+            RSI_PARAMS_SOURCE = "learned_params.json"
     except (json.JSONDecodeError, OSError):
         pass
 

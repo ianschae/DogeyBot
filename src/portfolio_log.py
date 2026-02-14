@@ -17,7 +17,9 @@ def _ensure_state(portfolio_value_usd: float) -> float:
         try:
             with open(STATE_FILE) as f:
                 data = json.load(f)
-            return float(data.get("initial_portfolio_value_usd", portfolio_value_usd))
+            initial = float(data.get("initial_portfolio_value_usd", portfolio_value_usd))
+            if initial > 0:
+                return initial
         except (json.JSONDecodeError, OSError, TypeError):
             pass
     initial = portfolio_value_usd
