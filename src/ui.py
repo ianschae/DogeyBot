@@ -511,7 +511,29 @@ def run_gui(shutdown_event) -> None:
             party_label.pack_forget()
         root.after(10000, update_gui)
 
+    def tick_countdown():
+        """Update only countdown bars/labels every second so they don't freeze when the event loop is busy (e.g. coin clicks)."""
+        if shutdown_event.is_set():
+            return
+        s = _read_status()
+        cd = _countdown_sec(s)
+        next_sec = s.get("next_check_seconds") or config.POLL_INTERVAL_SECONDS
+        if cd is not None and next_sec and next_sec > 0:
+            pct = 100.0 * (next_sec - cd) / next_sec
+            next_bar["value"] = min(100, max(0, pct))
+            next_value_label.config(text=f"Next check in {cd}s")
+        learn_cd = _countdown_learn_sec(s)
+        learn_interval = s.get("learn_interval_seconds") or config.LEARN_INTERVAL_SECONDS
+        if learn_cd is not None and learn_interval and learn_interval > 0:
+            pct_learn = 100.0 * (learn_interval - learn_cd) / learn_interval
+            learn_bar["value"] = min(100, max(0, pct_learn))
+            h, r = divmod(learn_cd, 3600)
+            m, sec = divmod(r, 60)
+            learn_value_label.config(text=f"Next backtest in {int(h)}h {int(m)}m {int(sec)}s")
+        root.after(1000, tick_countdown)
+
     root.after(500, update_gui)
+    root.after(1000, tick_countdown)
 
     def on_closing():
         shutdown_event.set()
