@@ -23,8 +23,8 @@ def main():
     # 1. Accounts (balances)
     print("\n1. Accounts (get_accounts)...")
     try:
-        doge, usd, usdc = client.get_doge_and_usd_balances()
-        print(f"   OK — DOGE: {doge}, USD: {usd}, USDC: {usdc}")
+        doge, usd = client.get_doge_and_usd_balances()
+        print(f"   OK — DOGE: {doge}, USD: {usd}")
     except Exception as e:
         print(f"   FAIL — {e}")
         ok = False
@@ -60,29 +60,18 @@ def main():
     do_order = args.test_order or args.test_buy
     if do_order and ok:
         print("\n4. Order API...")
-        doge, usd, usdc = client.get_doge_and_usd_balances()
+        doge, usd = client.get_doge_and_usd_balances()
         try:
-            use_usdc = config.QUOTE_CURRENCY == "USDC"
             if args.test_buy:
-                if use_usdc and float(usdc) >= config.MIN_QUOTE_SIZE_USD:
-                    print(f"   Placing market buy for {config.MIN_QUOTE_SIZE_USD} USDC (QUOTE_CURRENCY=USDC)...")
-                    client.market_buy_usdc(Decimal(str(config.MIN_QUOTE_SIZE_USD)))
-                    print("   OK — buy order placed (DOGE-USDC).")
-                elif not use_usdc and float(usd) >= config.MIN_QUOTE_SIZE_USD:
-                    print(f"   Placing market buy for {config.MIN_QUOTE_SIZE_USD} USD (QUOTE_CURRENCY=USD)...")
+                if float(usd) >= config.MIN_QUOTE_SIZE_USD:
+                    print(f"   Placing market buy for {config.MIN_QUOTE_SIZE_USD} USD...")
                     client.market_buy_usd(Decimal(str(config.MIN_QUOTE_SIZE_USD)))
                     print("   OK — buy order placed.")
                 else:
-                    need = config.QUOTE_CURRENCY
-                    have = float(usdc) if use_usdc else float(usd)
-                    print(f"   SKIP — QUOTE_CURRENCY={need}, you have {have:.2f} {need}. Need at least {config.MIN_QUOTE_SIZE_USD}.")
+                    print(f"   SKIP — you have {float(usd):.2f} USD. Need at least {config.MIN_QUOTE_SIZE_USD} USD.")
             else:
-                # --test-order: buy with chosen quote currency, else sell if DOGE
-                if use_usdc and float(usdc) >= config.MIN_QUOTE_SIZE_USD:
-                    print(f"   Placing market buy for {config.MIN_QUOTE_SIZE_USD} USDC...")
-                    client.market_buy_usdc(Decimal(str(config.MIN_QUOTE_SIZE_USD)))
-                    print("   OK — buy order placed (DOGE-USDC).")
-                elif not use_usdc and float(usd) >= config.MIN_QUOTE_SIZE_USD:
+                # --test-order: buy with USD, else sell if DOGE
+                if float(usd) >= config.MIN_QUOTE_SIZE_USD:
                     print(f"   Placing market buy for {config.MIN_QUOTE_SIZE_USD} USD...")
                     client.market_buy_usd(Decimal(str(config.MIN_QUOTE_SIZE_USD)))
                     print("   OK — buy order placed.")
@@ -91,7 +80,7 @@ def main():
                     client.market_sell_doge(Decimal(str(int(config.MIN_BASE_SIZE_DOGE))))
                     print("   OK — sell order placed.")
                 else:
-                    print(f"   SKIP — need at least {config.MIN_QUOTE_SIZE_USD} USD/USDC or {config.MIN_BASE_SIZE_DOGE} DOGE to place a test order.")
+                    print(f"   SKIP — need at least {config.MIN_QUOTE_SIZE_USD} USD or {config.MIN_BASE_SIZE_DOGE} DOGE to place a test order.")
         except Exception as e:
             print(f"   FAIL — {e}")
             ok = False

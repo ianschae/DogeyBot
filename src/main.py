@@ -41,7 +41,7 @@ def main():
         sys.exit(1)
     signal.signal(signal.SIGINT, _handle_sig)
     signal.signal(signal.SIGTERM, _handle_sig)
-    logger.info("Up and running — DOGE-USD, 6-hour candles. Quote currency: %s. Dry run: %s, allow live: %s.", config.QUOTE_CURRENCY, config.DRY_RUN, config.ALLOW_LIVE)
+    logger.info("Up and running — DOGE-USD, 6-hour candles. Dry run: %s, allow live: %s.", config.DRY_RUN, config.ALLOW_LIVE)
     if config.DRY_RUN:
         logger.info("No orders will be placed (dry run). Set DRY_RUN=false and ALLOW_LIVE=true in .env to trade live.")
     elif not config.ALLOW_LIVE:
@@ -80,7 +80,7 @@ def main():
                 logger.warning("Not enough price history yet (%s candles, need at least %s). Skipping this round.", len(candles), strategy.period + 2)
                 _sleep_until_shutdown(config.POLL_INTERVAL_SECONDS)
                 continue
-            doge, usd, usdc = client.get_doge_and_usd_balances()
+            doge, usd = client.get_doge_and_usd_balances()
             # In position only if we have a sellable amount of DOGE (avoids dust blocking buys when you DCA and have DOGE + USD)
             in_position = float(doge) >= config.MIN_BASE_SIZE_DOGE
             try:
@@ -88,15 +88,15 @@ def main():
             except (TypeError, ValueError):
                 price = 0.0
             try:
-                portfolio_value, gain_usd, gain_pct = portfolio_log.record(doge, usd + usdc, price)
-                logger.info("Balance: %s DOGE, %s USD, %s USDC. Holding DOGE: %s.", doge, usd, usdc, in_position)
+                portfolio_value, gain_usd, gain_pct = portfolio_log.record(doge, usd, price)
+                logger.info("Balance: %s DOGE, %s USD. Holding DOGE: %s.", doge, usd, in_position)
                 logger.info("Portfolio: $%.2f (total gain $%.2f / %s%% since tracking started).", portfolio_value, gain_usd, f"{gain_pct:.2f}")
             except Exception as e:
                 logger.warning("Portfolio snapshot skipped: %s", e)
-                logger.info("Balance: %s DOGE, %s USD, %s USDC. Holding DOGE: %s.", doge, usd, usdc, in_position)
+                logger.info("Balance: %s DOGE, %s USD. Holding DOGE: %s.", doge, usd, in_position)
             sig = strategy.get_signal(candles, in_position)
             logger.info("Decision: %s.", sig)
-            engine.run(sig, doge, usd, usdc)
+            engine.run(sig, doge, usd)
             logger.info("Next check in %s seconds.", config.POLL_INTERVAL_SECONDS)
         except Exception as e:
             logger.exception("Something went wrong: %s", e)

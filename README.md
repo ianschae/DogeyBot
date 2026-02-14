@@ -20,7 +20,7 @@ Simple Dogecoin (DOGE-USD) trading bot for Coinbase Advanced Trade. Plug in your
    - Copy `.env.example` to `.env` and set:
      - `COINBASE_API_KEY` – your API key
      - `COINBASE_API_SECRET` – your API secret
-   - Optional: `DRY_RUN=false` and `ALLOW_LIVE=true` to trade for real (defaults: dry run only, no orders). Set `QUOTE_CURRENCY=USDC` if your buy cash is in USDC.
+   - Optional: `DRY_RUN=false` and `ALLOW_LIVE=true` to trade for real (defaults: dry run only, no orders).
 
 3. **Run**
 
@@ -32,7 +32,7 @@ Simple Dogecoin (DOGE-USD) trading bot for Coinbase Advanced Trade. Plug in your
 
 Run tests: `pytest tests/`
 
-Test API connections: `python -m src.test_api`. Add `--test-order` to place one small real order ($1 buy or 1 DOGE sell), or `--test-buy` to test a $1 buy (uses your chosen QUOTE_CURRENCY: USD or USDC).
+Test API connections: `python -m src.test_api`. Add `--test-order` to place one small real order ($1 buy or 1 DOGE sell), or `--test-buy` to test a $1 USD buy.
 
 ## Learning
 
@@ -48,14 +48,14 @@ Optional: `--days 60` (default 60). Writes the best to `learned_params.json`; th
 
 ## Behavior
 
-- **Product**: DOGE-USD for candles and sells; buys use DOGE-USD or DOGE-USDC depending on `QUOTE_CURRENCY`.
+- **Product**: DOGE-USD for candles, buys, and sells.
 - **Strategy**: RSI(14) mean reversion; buy when RSI &lt; 30, sell when RSI &gt; 50. Uses 6-hour candles.
-- **Capital**: Uses only the DOGE, USD, and USDC in your Coinbase account (no external deposits). Set `QUOTE_CURRENCY=USD` or `QUOTE_CURRENCY=USDC` in `.env` to choose which balance to use for buys (DOGE-USD or DOGE-USDC). On sell it sells all DOGE. Having both DOGE and cash (USD/USDC) at once (e.g. from DCA outside the bot) is supported: portfolio value is USD + USDC + DOGE×price, and you're only "in position" when you have at least the min sell size in DOGE, so dust won't block buying.
+- **Capital**: Uses only the DOGE and USD in your Coinbase account (no external deposits). Buys use USD; on sell it sells all DOGE. Having both DOGE and USD at once (e.g. from DCA outside the bot) is supported: portfolio value is USD + DOGE×price, and you're only "in position" when you have at least the min sell size in DOGE, so dust won't block buying.
 - **Safety**: Default is dry-run. Set `DRY_RUN=false` and `ALLOW_LIVE=true` in `.env` to enable live trading. Min order size and cooldown between orders apply.
 
 ## Data
 
-The bot writes `portfolio_state.json` (initial value when tracking started) and `portfolio_log.csv` (one row per tick: timestamp_utc, usd, doge, price, portfolio_value_usd, gain_usd, gain_pct; the usd column is USD+USDC total). The CSV grows by about one row per poll (e.g. ~1440 rows per day at 60s). For long-running 24/7 use, archive or trim the file periodically if needed.
+The bot writes `portfolio_state.json` (initial value when tracking started) and `portfolio_log.csv` (one row per tick: timestamp_utc, usd, doge, price, portfolio_value_usd, gain_usd, gain_pct). The CSV grows by about one row per poll (e.g. ~1440 rows per day at 60s). For long-running 24/7 use, archive or trim the file periodically if needed.
 
 ## Running 24/7
 

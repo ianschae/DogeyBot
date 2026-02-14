@@ -20,10 +20,6 @@ ALLOW_LIVE = os.environ.get("ALLOW_LIVE", "false").strip().lower() in ("true", "
 PRODUCT_ID = "DOGE-USD"
 CANDLE_GRANULARITY = "SIX_HOUR"
 
-# Quote currency for buys: USD or USDC (set in .env to choose DOGE-USD vs DOGE-USDC)
-_quote = os.environ.get("QUOTE_CURRENCY", "USD").strip().upper()
-QUOTE_CURRENCY = "USDC" if _quote == "USDC" else "USD"
-
 # RSI params: load from learned_params.json if present, else defaults
 _LEARNED_PARAMS_PATH = Path(__file__).resolve().parent.parent / "learned_params.json"
 _default_period, _default_entry, _default_exit = 14, 30, 50
