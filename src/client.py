@@ -71,8 +71,20 @@ def get_doge_and_usd_balances() -> tuple[Decimal, Decimal]:
     return doge, usd
 
 
-def get_current_price() -> float | None:
-    """Fetch current DOGE-USD price from the product endpoint. Returns None on failure."""
+def _parse_float(val, strip_pct: bool = True) -> float | None:
+    """Parse API string to float; if strip_pct, remove trailing '%'."""
+    if val is None:
+        return None
+    s = str(val).strip().rstrip("%")
+    try:
+        return float(s)
+    except (TypeError, ValueError):
+        return None
+
+
+def get_product_market_data() -> dict:
+    """Fetch DOGE-USD product once; return dict with price, change_24h_pct, volume_24h (None on missing/fail)."""
+    out = {"price": None, "change_24h_pct": None, "volume_24h": None}
     client = _client()
 
     def _fetch():
@@ -81,15 +93,22 @@ def get_current_price() -> float | None:
     try:
         resp = _retry(_fetch)
     except Exception as e:
-        logger.debug("Couldn't fetch current price: %s", e)
-        return None
-    price = getattr(resp, "price", None) if not isinstance(resp, dict) else resp.get("price")
-    if price is None:
-        return None
-    try:
-        return float(str(price))
-    except (TypeError, ValueError):
-        return None
+        logger.debug("Couldn't fetch product: %s", e)
+        return out
+    is_dict = isinstance(resp, dict)
+    price = resp.get("price") if is_dict else getattr(resp, "price", None)
+    change = resp.get("price_percentage_change_24h") if is_dict else getattr(resp, "price_percentage_change_24h", None)
+    vol = resp.get("volume_24h") if is_dict else getattr(resp, "volume_24h", None)
+    p = _parse_float(price, strip_pct=False)
+    if p is not None and p > 0:
+        out["price"] = p
+    c = _parse_float(change)
+    if c is not None:
+        out["change_24h_pct"] = c
+    v = _parse_float(vol, strip_pct=False)
+    if v is not None and v >= 0:
+        out["volume_24h"] = v
+    return out
 
 
 def get_closed_candles(count: int = None) -> list[dict]:

@@ -61,6 +61,8 @@ def _write_status(
     rsi_entry: int,
     rsi_exit: int,
     last_learn_time: float,
+    change_24h_pct: float | None = None,
+    volume_24h: float | None = None,
 ) -> None:
     """Write status.json for the UI (only when UI_ENABLED)."""
     if not config.UI_ENABLED:
@@ -75,7 +77,7 @@ def _write_status(
     try:
         config.STATUS_FILE.parent.mkdir(parents=True, exist_ok=True)
         with open(config.STATUS_FILE, "w") as f:
-            json.dump({
+            payload = {
                 "doge": round(doge, 8),
                 "usd": round(usd, 2),
                 "in_position": in_position,
@@ -98,7 +100,12 @@ def _write_status(
                 "learn_interval_seconds": config.LEARN_INTERVAL_SECONDS,
                 "dry_run": config.DRY_RUN,
                 "allow_live": config.ALLOW_LIVE,
-            }, f, indent=2)
+            }
+            if change_24h_pct is not None:
+                payload["change_24h_pct"] = round(change_24h_pct, 2)
+            if volume_24h is not None:
+                payload["volume_24h"] = round(volume_24h, 0)
+            json.dump(payload, f, indent=2)
         config.secure_file(config.STATUS_FILE)
     except OSError as e:
         logger.debug("Could not write status file: %s", e)
@@ -139,10 +146,13 @@ def _bot_loop(strategy: RSIMeanReversion) -> None:
                 logger.warning("Invalid or missing close price; skipping this round.")
                 _sleep_until_shutdown(config.POLL_INTERVAL_SECONDS)
                 continue
-            # Use current product price for display; fall back to candle close if API fails
-            display_price = client.get_current_price()
+            # Use current product price and market data for display; fall back to candle close if API fails
+            market = client.get_product_market_data()
+            display_price = market.get("price")
             if display_price is None or display_price <= 0:
                 display_price = candle_price
+            change_24h_pct = market.get("change_24h_pct")
+            volume_24h = market.get("volume_24h")
             try:
                 (portfolio_value, gain_usd, gain_pct, peak, drawdown_pct,
                  days_tracked, avg_daily_gain_pct, avg_daily_gain_usd) = portfolio_log.record(doge, usd, candle_price)
@@ -160,6 +170,8 @@ def _bot_loop(strategy: RSIMeanReversion) -> None:
                 portfolio_value, gain_usd, gain_pct, peak, drawdown_pct, days_tracked, avg_daily_gain_pct, avg_daily_gain_usd,
                 display_price, candles, strategy.period,
                 strategy.entry, strategy.exit, last_learn_time,
+                change_24h_pct=change_24h_pct,
+                volume_24h=volume_24h,
             )
             logger.info("Next check in %s seconds.", config.POLL_INTERVAL_SECONDS)
         except Exception as e:

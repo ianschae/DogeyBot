@@ -20,6 +20,8 @@ def _read_status() -> dict:
         "gain_pct": 0,
         "peak_usd": 0,
         "drawdown_pct": 0,
+        "change_24h_pct": None,
+        "volume_24h": None,
         "days_tracked": 0,
         "avg_daily_gain_pct": 0,
         "avg_daily_gain_usd": 0,
@@ -318,8 +320,8 @@ def run_gui(shutdown_event) -> None:
         lbl = tk.Label(f, text="—", font=font_stat, bg=card_bg, fg=fg_primary)
         lbl.pack()
         stat_labels[key] = lbl
-    extra_names = ("peak portfolio", "days tracked", "avg daily %", "USD daily")
-    extra_keys = ("peak", "days", "avg_daily", "usd_daily")
+    extra_names = ("peak portfolio", "days tracked", "avg daily %", "USD daily", "24h change")
+    extra_keys = ("peak", "days", "avg_daily", "usd_daily", "change_24h")
     for col, (name, key) in enumerate(zip(extra_names, extra_keys)):
         f = tk.Frame(stats_f, bg=card_bg, relief=tk.FLAT, borderwidth=0, padx=pad_md, pady=pad_md)
         f.grid(row=1, column=col, padx=6, pady=(6, 0), sticky="nsew")
@@ -334,7 +336,9 @@ def run_gui(shutdown_event) -> None:
     rsi_bar = ttk.Progressbar(bars_f, length=400, mode="determinate", maximum=100, style="Warm.Horizontal.TProgressbar")
     rsi_bar.pack(fill=tk.X, pady=(0, 2))
     rsi_value_label = tk.Label(bars_f, text="—", font=font_label, bg=bg, fg=fg_primary)
-    rsi_value_label.pack(anchor=tk.W, pady=(0, pad_lg))
+    rsi_value_label.pack(anchor=tk.W, pady=(0, 2))
+    rsi_zone_label = tk.Label(bars_f, text="—", font=font_label, bg=bg, fg=fg_muted)
+    rsi_zone_label.pack(anchor=tk.W, pady=(0, pad_lg))
 
     tk.Label(bars_f, text="many seconds until next check", font=font_label, bg=bg, fg=fg_muted).pack(anchor=tk.W, pady=(pad_sm, 2))
     next_bar = ttk.Progressbar(bars_f, length=400, mode="determinate", maximum=100, style="Warm.Horizontal.TProgressbar")
@@ -470,6 +474,20 @@ def run_gui(shutdown_event) -> None:
         stat_labels["days"].config(text=fmt(days_val))
         stat_labels["avg_daily"].config(text=f"{fmt(avg_val)}%", fg=fg_success if avg_val > 0 else fg_danger if avg_val < 0 else fg_primary)
         stat_labels["usd_daily"].config(text=f"${fmt(usd_daily_val)}", fg=fg_success if usd_daily_val > 0 else fg_danger if usd_daily_val < 0 else fg_primary)
+        ch = s.get("change_24h_pct")
+        vol = s.get("volume_24h")
+        if ch is not None:
+            change_text = f"{'+' if ch >= 0 else ''}{fmt(ch)}%"
+            if vol is not None and vol >= 0:
+                if vol >= 1_000_000:
+                    change_text += f"\n{vol / 1_000_000:.1f}M vol"
+                elif vol >= 1_000:
+                    change_text += f"\n{vol / 1_000:.1f}K vol"
+                else:
+                    change_text += f"\n{fmt(vol)} vol"
+            stat_labels["change_24h"].config(text=change_text, fg=fg_success if ch > 0 else fg_danger if ch < 0 else fg_primary)
+        else:
+            stat_labels["change_24h"].config(text="—", fg=fg_primary)
 
         if rsi_val is not None:
             rsi_bar["value"] = min(100, max(0, float(rsi_val)))
@@ -477,6 +495,12 @@ def run_gui(shutdown_event) -> None:
         else:
             rsi_bar["value"] = 0
             rsi_value_label.config(text="RSI = —")
+        entry_r = s.get("rsi_entry")
+        exit_r = s.get("rsi_exit")
+        if entry_r is not None and exit_r is not None:
+            rsi_zone_label.config(text=f"buy when RSI < {entry_r}, sell when RSI > {exit_r}")
+        else:
+            rsi_zone_label.config(text="—")
 
         if cd is not None and next_sec and next_sec > 0:
             pct = 100.0 * (next_sec - cd) / next_sec
@@ -509,31 +533,9 @@ def run_gui(shutdown_event) -> None:
             party_label.pack(pady=(4, 2))
         else:
             party_label.pack_forget()
-        root.after(10000, update_gui)
-
-    def tick_countdown():
-        """Update only countdown bars/labels every second so they don't freeze when the event loop is busy (e.g. coin clicks)."""
-        if shutdown_event.is_set():
-            return
-        s = _read_status()
-        cd = _countdown_sec(s)
-        next_sec = s.get("next_check_seconds") or config.POLL_INTERVAL_SECONDS
-        if cd is not None and next_sec and next_sec > 0:
-            pct = 100.0 * (next_sec - cd) / next_sec
-            next_bar["value"] = min(100, max(0, pct))
-            next_value_label.config(text=f"Next check in {cd}s")
-        learn_cd = _countdown_learn_sec(s)
-        learn_interval = s.get("learn_interval_seconds") or config.LEARN_INTERVAL_SECONDS
-        if learn_cd is not None and learn_interval and learn_interval > 0:
-            pct_learn = 100.0 * (learn_interval - learn_cd) / learn_interval
-            learn_bar["value"] = min(100, max(0, pct_learn))
-            h, r = divmod(learn_cd, 3600)
-            m, sec = divmod(r, 60)
-            learn_value_label.config(text=f"Next backtest in {int(h)}h {int(m)}m {int(sec)}s")
-        root.after(1000, tick_countdown)
+        root.after(1000, update_gui)
 
     root.after(500, update_gui)
-    root.after(1000, tick_countdown)
 
     def on_closing():
         shutdown_event.set()
