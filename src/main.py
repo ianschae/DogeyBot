@@ -50,6 +50,11 @@ def _write_status(
     portfolio_value: float,
     gain_usd: float,
     gain_pct: float,
+    peak: float,
+    drawdown_pct: float,
+    days_tracked: float,
+    avg_daily_gain_pct: float,
+    avg_daily_gain_usd: float,
     price: float,
     candles: list,
     strategy_period: int,
@@ -78,6 +83,11 @@ def _write_status(
                 "portfolio_value": round(portfolio_value, 2),
                 "gain_usd": round(gain_usd, 2),
                 "gain_pct": round(gain_pct, 2),
+                "peak_usd": round(peak, 2),
+                "drawdown_pct": round(drawdown_pct, 2),
+                "days_tracked": round(days_tracked, 1),
+                "avg_daily_gain_pct": round(avg_daily_gain_pct, 2),
+                "avg_daily_gain_usd": round(avg_daily_gain_usd, 2),
                 "price": round(price, 6),
                 "rsi": round(rsi, 1) if rsi is not None else None,
                 "rsi_entry": rsi_entry,
@@ -120,6 +130,7 @@ def _bot_loop(strategy: RSIMeanReversion) -> None:
             doge, usd = client.get_doge_and_usd_balances()
             in_position = float(doge) >= config.MIN_BASE_SIZE_DOGE
             portfolio_value = gain_usd = gain_pct = 0.0
+            peak = drawdown_pct = days_tracked = avg_daily_gain_pct = avg_daily_gain_usd = 0.0
             try:
                 price = float(candles[-1].get("close", 0))
             except (TypeError, ValueError):
@@ -129,9 +140,11 @@ def _bot_loop(strategy: RSIMeanReversion) -> None:
                 _sleep_until_shutdown(config.POLL_INTERVAL_SECONDS)
                 continue
             try:
-                portfolio_value, gain_usd, gain_pct = portfolio_log.record(doge, usd, price)
+                (portfolio_value, gain_usd, gain_pct, peak, drawdown_pct,
+                 days_tracked, avg_daily_gain_pct, avg_daily_gain_usd) = portfolio_log.record(doge, usd, price)
                 logger.info("Balance: %s DOGE, %s USD. Holding DOGE: %s.", doge, usd, in_position)
-                logger.info("Portfolio: $%.2f (total gain $%.2f / %s%% since tracking started).", portfolio_value, gain_usd, f"{gain_pct:.2f}")
+                logger.info("Portfolio: $%.2f (gain $%.2f / %s%%); peak $%.2f; %s days; avg daily %s%% / $%.2f.",
+                    portfolio_value, gain_usd, f"{gain_pct:.2f}", peak, f"{days_tracked:.1f}", f"{avg_daily_gain_pct:.2f}", avg_daily_gain_usd)
             except Exception as e:
                 logger.warning("Portfolio snapshot skipped: %s", e)
                 logger.info("Balance: %s DOGE, %s USD. Holding DOGE: %s.", doge, usd, in_position)
@@ -140,7 +153,8 @@ def _bot_loop(strategy: RSIMeanReversion) -> None:
             engine.run(sig, doge, usd)
             _write_status(
                 float(doge), float(usd), in_position, sig,
-                portfolio_value, gain_usd, gain_pct, price, candles, strategy.period,
+                portfolio_value, gain_usd, gain_pct, peak, drawdown_pct, days_tracked, avg_daily_gain_pct, avg_daily_gain_usd,
+                price, candles, strategy.period,
                 strategy.entry, strategy.exit, last_learn_time,
             )
             logger.info("Next check in %s seconds.", config.POLL_INTERVAL_SECONDS)

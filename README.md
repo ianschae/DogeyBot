@@ -49,7 +49,7 @@ The bot **learns in real time** from main: on startup it backtests the last 60 d
 
 ## Data
 
-The bot writes `portfolio_state.json` (initial value when tracking started), `portfolio_log.csv` (one row per tick: timestamp_utc, usd, doge, price, portfolio_value_usd, gain_usd, gain_pct), and `status.json` (current snapshot for the GUI). The CSV grows by about one row per poll (e.g. ~1440 rows per day at 60s). For long-running 24/7 use, archive or trim the file periodically if needed.
+The bot writes `portfolio_state.json` (initial value, peak portfolio value, and started_at), `portfolio_log.csv` (one row per poll: timestamp_utc, usd, doge, price, portfolio_value_usd, gain_usd, gain_pct, peak_usd, drawdown_pct, days_tracked, avg_daily_gain_pct), and `status.json` (current snapshot for the GUI). The GUI shows portfolio value, gain, peak, drawdown from peak, days tracked, and average daily gain %. The CSV grows by about one row per poll (e.g. ~1440 rows per day at 60s). For long-running 24/7 use, archive or trim the file periodically if needed.
 
 ## Security
 

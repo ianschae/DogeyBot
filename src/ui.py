@@ -18,6 +18,11 @@ def _read_status() -> dict:
         "portfolio_value": 0,
         "gain_usd": 0,
         "gain_pct": 0,
+        "peak_usd": 0,
+        "drawdown_pct": 0,
+        "days_tracked": 0,
+        "avg_daily_gain_pct": 0,
+        "avg_daily_gain_usd": 0,
         "price": 0,
         "rsi": None,
         "rsi_entry": 30,
@@ -265,6 +270,15 @@ def run_gui(shutdown_event) -> None:
         lbl = tk.Label(f, text="—", font=font_stat, bg="#f0e6d0", fg="#3d2914")
         lbl.pack()
         stat_labels[key] = lbl
+    extra_names = ("peak portfolio", "days tracked", "avg daily %", "USD daily")
+    extra_keys = ("peak", "days", "avg_daily", "usd_daily")
+    for col, (name, key) in enumerate(zip(extra_names, extra_keys)):
+        f = tk.Frame(stats_f, bg="#f0e6d0", relief=tk.RAISED, borderwidth=2, padx=12, pady=10)
+        f.grid(row=1, column=col, padx=6, pady=(6, 0), sticky="nsew")
+        tk.Label(f, text=name, font=font_label, bg="#f0e6d0", fg="#8b7355").pack()
+        lbl = tk.Label(f, text="—", font=font_stat, bg="#f0e6d0", fg="#3d2914")
+        lbl.pack()
+        stat_labels[key] = lbl
 
     tk.Label(root, text="very RSI", font=font_label, bg="#fffbf0", fg="#8b7355").pack(anchor=tk.W, pady=(8, 2))
     rsi_bar = ttk.Progressbar(root, length=400, mode="determinate", maximum=100)
@@ -363,6 +377,14 @@ def run_gui(shutdown_event) -> None:
         gain_text = f"${fmt(gu)} ({fmt(gp)}%)"
         stat_labels["gain"].config(text=gain_text, fg="#2d8a3e" if gp > 0 else "#c0392b" if gp < 0 else "#3d2914")
         stat_labels["move"].config(text=move_text, fg="#2d8a3e" if sig == "buy" else "#c0392b" if sig == "sell" else "#c9a227")
+        peak_val = s.get("peak_usd") or 0
+        days_val = s.get("days_tracked") or 0
+        avg_val = s.get("avg_daily_gain_pct") or 0
+        usd_daily_val = s.get("avg_daily_gain_usd") or 0
+        stat_labels["peak"].config(text=f"${fmt(peak_val)}")
+        stat_labels["days"].config(text=fmt(days_val))
+        stat_labels["avg_daily"].config(text=f"{fmt(avg_val)}%", fg="#2d8a3e" if avg_val > 0 else "#c0392b" if avg_val < 0 else "#3d2914")
+        stat_labels["usd_daily"].config(text=f"${fmt(usd_daily_val)}", fg="#2d8a3e" if usd_daily_val > 0 else "#c0392b" if usd_daily_val < 0 else "#3d2914")
 
         if rsi_val is not None:
             rsi_bar["value"] = min(100, max(0, float(rsi_val)))
