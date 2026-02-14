@@ -1,4 +1,4 @@
-"""Test Coinbase API connections (read-only: accounts and candles). Optional: place one small real order with --test-order."""
+"""Test Coinbase API connections (read-only: accounts and candles). Optional: place small real orders with --test-buy / --test-sell / --test-order."""
 import argparse
 import sys
 import time
@@ -10,8 +10,9 @@ from . import client
 
 def main():
     parser = argparse.ArgumentParser(description="Test API connections")
-    parser.add_argument("--test-order", action="store_true", help="Place one small real order ($1 buy or 1 DOGE sell) to verify order API")
-    parser.add_argument("--test-buy", action="store_true", help="Place one small real buy ($1 USD) to verify buy API")
+    parser.add_argument("--test-order", action="store_true", help="Place one small order: buy if you have USD, else sell if you have DOGE")
+    parser.add_argument("--test-buy", action="store_true", help="Place one small post-only limit buy (min USD)")
+    parser.add_argument("--test-sell", action="store_true", help="Place one small post-only limit sell (min DOGE)")
     args = parser.parse_args()
 
     print("Testing API connections (read-only)...")
@@ -56,29 +57,35 @@ def main():
         print(f"   FAIL — {e}")
         ok = False
 
-    # 4. Optional: place one small real order
-    do_order = args.test_order or args.test_buy
+    # 4. Optional: place small real order(s)
+    do_order = args.test_order or args.test_buy or args.test_sell
     if do_order and ok:
         print("\n4. Order API...")
         doge, usd = client.get_doge_and_usd_balances()
         try:
             if args.test_buy:
                 if float(usd) >= config.MIN_QUOTE_SIZE_USD:
-                    print(f"   Placing market buy for {config.MIN_QUOTE_SIZE_USD} USD...")
-                    client.market_buy_usd(Decimal(str(config.MIN_QUOTE_SIZE_USD)))
-                    print("   OK — buy order placed.")
+                    print(f"   Placing post-only limit buy for {config.MIN_QUOTE_SIZE_USD} USD...")
+                    client.limit_buy_usd_post_only(Decimal(str(config.MIN_QUOTE_SIZE_USD)))
+                    print("   OK — limit buy order placed.")
                 else:
                     print(f"   SKIP — you have {float(usd):.2f} USD. Need at least {config.MIN_QUOTE_SIZE_USD} USD.")
-            else:
-                # --test-order: buy with USD, else sell if DOGE
+            if args.test_sell:
+                if float(doge) >= config.MIN_BASE_SIZE_DOGE:
+                    print(f"   Placing post-only limit sell for {config.MIN_BASE_SIZE_DOGE} DOGE...")
+                    client.limit_sell_doge_post_only(Decimal(str(int(config.MIN_BASE_SIZE_DOGE))))
+                    print("   OK — limit sell order placed.")
+                else:
+                    print(f"   SKIP — you have {float(doge):.2f} DOGE. Need at least {config.MIN_BASE_SIZE_DOGE} DOGE.")
+            if args.test_order and not args.test_buy and not args.test_sell:
                 if float(usd) >= config.MIN_QUOTE_SIZE_USD:
-                    print(f"   Placing market buy for {config.MIN_QUOTE_SIZE_USD} USD...")
-                    client.market_buy_usd(Decimal(str(config.MIN_QUOTE_SIZE_USD)))
-                    print("   OK — buy order placed.")
+                    print(f"   Placing post-only limit buy for {config.MIN_QUOTE_SIZE_USD} USD...")
+                    client.limit_buy_usd_post_only(Decimal(str(config.MIN_QUOTE_SIZE_USD)))
+                    print("   OK — limit buy order placed.")
                 elif float(doge) >= config.MIN_BASE_SIZE_DOGE:
-                    print(f"   Placing market sell for {config.MIN_BASE_SIZE_DOGE} DOGE...")
-                    client.market_sell_doge(Decimal(str(int(config.MIN_BASE_SIZE_DOGE))))
-                    print("   OK — sell order placed.")
+                    print(f"   Placing post-only limit sell for {config.MIN_BASE_SIZE_DOGE} DOGE...")
+                    client.limit_sell_doge_post_only(Decimal(str(int(config.MIN_BASE_SIZE_DOGE))))
+                    print("   OK — limit sell order placed.")
                 else:
                     print(f"   SKIP — need at least {config.MIN_QUOTE_SIZE_USD} USD or {config.MIN_BASE_SIZE_DOGE} DOGE to place a test order.")
         except Exception as e:

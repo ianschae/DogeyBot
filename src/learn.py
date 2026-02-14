@@ -15,110 +15,174 @@ LEARN_DAYS = config.LEARN_DAYS
 LEARN_INTERVAL_SECONDS = config.LEARN_INTERVAL_SECONDS
 INITIAL_USD = 1000.0
 
-# Expanding grid rounds: try until we find a profitable combo (entry < exit).
-# Each round is (entry_values, exit_values). We stop at first round that has return > 0.
-GRID_ROUNDS = [
-    ([28, 30, 32], [48, 50, 52]),
-    (list(range(24, 38, 2)), list(range(46, 58, 2))),   # round 2: wider
-    (list(range(20, 42, 2)), list(range(44, 62, 2))),   # round 3: even wider
-]
+# Require at least one trade so we don't pick "no trades" as best.
+MIN_TRADES = 1
+# Backtest for learning: 0.6% per side (Coinbase maker / post-only limit).
+LEARN_FEE_PCT = 0.6
+LEARN_SLIPPAGE_PCT = 0.0
+
+# Grid: search every integer (entry, exit) with entry < exit in a wide RSI range.
+ENTRY_MIN, ENTRY_MAX = 10, 45
+EXIT_MIN, EXIT_MAX = 41, 76
+# Timeframes to search (pull max history per timeframe, find best across all).
+LEARN_GRANULARITIES = list(client.GRANULARITY_SECONDS.keys())
 
 
-def run_backtest(candles: list[dict], entry: int, exit_: int, fee_pct: float = None) -> tuple[float, int]:
-    """Simulate RSI strategy. Returns (return_pct, trade_count). Period fixed at 14.
-    fee_pct: optional fee per trade side (e.g. 0.5 for 0.5%%); uses config.LEARN_FEE_PCT if None."""
+def _compute_rsi_series(candles: list[dict]) -> list[float | None]:
+    """Precompute RSI for each candle index. rsi_series[i] is RSI at candle i, or None if not enough data."""
+    out = [None] * len(candles)
+    closes = []
+    for c in candles:
+        try:
+            closes.append(float(c.get("close", 0)))
+        except (TypeError, ValueError):
+            closes.append(0.0)
+    for i in range(PERIOD + 1, len(closes)):
+        rsi = _rsi_wilder(closes[: i + 1], PERIOD)
+        out[i] = rsi
+    return out
+
+
+def run_backtest(
+    candles: list[dict],
+    entry: int,
+    exit_: int,
+    fee_pct: float | None = None,
+    slippage_pct: float = 0.0,
+    rsi_series: list[float | None] | None = None,
+    start_index: int = 0,
+    initial_usd: float | None = None,
+    initial_doge: float | None = None,
+    maker_offset_pct: float | None = None,
+) -> tuple[float, int, float, float]:
+    """Simulate RSI strategy. Returns (return_pct, trade_count, final_usd, final_doge).
+    If rsi_series is provided it must match candles; otherwise RSI is computed per bar.
+    start_index/initial_*: when set, simulation starts at that candle with that state (for holdout).
+    maker_offset_pct: simulate post-only limit fills (buy below mid, sell above mid); uses config.LIMIT_OFFSET_PCT if None."""
     if len(candles) < PERIOD + 2:
-        return 0.0, 0
+        return 0.0, 0, INITIAL_USD, 0.0
     if fee_pct is None:
         fee_pct = config.LEARN_FEE_PCT
-    usd = INITIAL_USD
-    doge = 0.0
+    if maker_offset_pct is None:
+        maker_offset_pct = getattr(config, "LIMIT_OFFSET_PCT", 0.1)
+    if rsi_series is None:
+        rsi_series = _compute_rsi_series(candles)
+    usd = initial_usd if initial_usd is not None else INITIAL_USD
+    doge = initial_doge if initial_doge is not None else 0.0
     trades = 0
-    for i in range(PERIOD + 1, len(candles)):
-        window = candles[: i + 1]
-        closes = []
-        for c in window:
-            try:
-                closes.append(float(c.get("close", 0)))
-            except (TypeError, ValueError):
-                continue
-        if len(closes) < PERIOD + 2:
-            continue
-        rsi = _rsi_wilder(closes, PERIOD)
+    for i in range(max(PERIOD + 1, start_index), len(candles)):
+        rsi = rsi_series[i] if i < len(rsi_series) else None
         if rsi is None:
             continue
-        close_price = float(window[-1].get("close", 0))
+        close_price = float(candles[i].get("close", 0))
         if close_price <= 0:
             continue
         in_position = doge > 0
         if not in_position and rsi < entry:
             usd_after_fee = usd * (1.0 - fee_pct / 100.0)
-            doge = usd_after_fee / close_price
+            # Post-only limit: buy below mid (better price)
+            fill_buy = close_price * (1.0 - maker_offset_pct / 100.0) * (1.0 + slippage_pct / 100.0)
+            doge = usd_after_fee / fill_buy
             usd = 0.0
             trades += 1
         elif in_position and rsi > exit_:
-            usd = doge * close_price * (1.0 - fee_pct / 100.0)
+            # Post-only limit: sell above mid (better price)
+            fill_sell = close_price * (1.0 + maker_offset_pct / 100.0) * (1.0 - slippage_pct / 100.0)
+            usd = doge * fill_sell * (1.0 - fee_pct / 100.0)
             doge = 0.0
             trades += 1
     if doge > 0 and candles:
         last_close = float(candles[-1].get("close", 0))
         if last_close > 0:
             usd = doge * last_close
-    if INITIAL_USD <= 0:
-        return 0.0, trades
-    return_pct = 100.0 * (usd - INITIAL_USD) / INITIAL_USD
-    return return_pct, trades
+            doge = 0.0
+    value_end = usd
+    if start_index > 0 and initial_usd is not None:
+        initial_value = initial_usd + (initial_doge or 0.0) * float(candles[start_index].get("close", 0))
+    else:
+        initial_value = INITIAL_USD
+    if initial_value <= 0:
+        return 0.0, trades, usd, doge
+    return_pct = 100.0 * (value_end - initial_value) / initial_value
+    return return_pct, trades, usd, doge
 
 
-def run_learn(days: int = LEARN_DAYS, logger=None) -> Optional[tuple[int, int, float, int]]:
-    """Fetch history, run expanding grid backtest until a profitable combo is found.
-    Writes learned_params.json and returns (entry, exit, return_pct, trades) or None."""
-    end_ts = int(time.time())
-    start_ts = end_ts - days * 86400
+def run_learn(days: int = LEARN_DAYS, logger=None) -> Optional[tuple[int | None, int | None, float, int]]:
+    """Pull max history for each timeframe (ONE_HOUR, SIX_HOUR, ONE_DAY). Search every (entry, exit)
+    on each. Pick the single (granularity, entry, exit) with highest return > 0. Write learned_params.json
+    including CANDLE_GRANULARITY. If none profitable, return (None, None, default_ret, default_tr) for UI."""
     if logger:
-        logger.info("Looking at the last %s days of DOGE-USD prices...", days)
-    candles = client.get_candles_range(start_ts, end_ts, "SIX_HOUR")
-    if len(candles) < PERIOD + 2:
+        logger.info("Pulling all backdata across timeframes %s (max 350 candles each, %.1f%% fee per side)...",
+            LEARN_GRANULARITIES, LEARN_FEE_PCT)
+    best_ret = None
+    best_tr = 0
+    best_entry = None
+    best_exit = None
+    best_granularity = None
+    default_candles = None
+    for granularity in LEARN_GRANULARITIES:
+        candles = client.get_candles_max_history(granularity)
+        if len(candles) < PERIOD + 2:
+            if logger:
+                logger.info("  %s: only %s candles, skip.", granularity, len(candles))
+            if default_candles is None and candles:
+                default_candles = candles
+            continue
         if logger:
-            logger.warning("Learning skipped: couldn't fetch enough history (%s candles, need %s+). Using default settings.", len(candles), PERIOD + 2)
-        return None
-    if logger:
-        logger.info("Got %s candles. Searching for a profitable combo (expanding grid until one is found)...", len(candles))
-    for round_num, (entry_grid, exit_grid) in enumerate(GRID_ROUNDS, start=1):
-        if logger:
-            logger.info("Round %s: trying entry %s, exit %s.", round_num, entry_grid, exit_grid)
-        best_return = None
-        best_trades = 0
-        best_entry = None
-        best_exit = None
-        for entry in entry_grid:
-            for exit_ in exit_grid:
-                if exit_ <= entry:
+            logger.info("  %s: %s candles, searching (entry, exit)...", granularity, len(candles))
+        rsi_series = _compute_rsi_series(candles)
+        if default_candles is None:
+            default_candles = candles
+        for entry in range(ENTRY_MIN, ENTRY_MAX + 1):
+            for exit_ in range(max(EXIT_MIN, entry + 1), EXIT_MAX + 1):
+                full_ret, full_tr, _, _ = run_backtest(
+                    candles, entry, exit_, LEARN_FEE_PCT, LEARN_SLIPPAGE_PCT, rsi_series
+                )
+                if full_ret <= 0 or full_tr < MIN_TRADES:
                     continue
-                ret, tr = run_backtest(candles, entry, exit_)
-                if logger:
-                    logger.info("  Buy when RSI < %s, sell when RSI > %s → %s%%, %s trades.", entry, exit_, f"{ret:.2f}", tr)
-                if tr < 1:
-                    continue
-                if ret > 0 and (best_return is None or ret > best_return or (ret == best_return and tr > best_trades)):
-                    best_return = ret
-                    best_trades = tr
+                better = (
+                    best_ret is None
+                    or full_ret > best_ret
+                    or (full_ret == best_ret and full_tr > best_tr)
+                )
+                if better:
+                    best_ret = full_ret
+                    best_tr = full_tr
                     best_entry = entry
                     best_exit = exit_
-        if best_entry is not None and best_return is not None and best_return > 0:
-            out = {"RSI_PERIOD": PERIOD, "RSI_ENTRY": best_entry, "RSI_EXIT": best_exit}
-            path = Path(__file__).resolve().parent.parent / "learned_params.json"
-            with open(path, "w") as f:
-                json.dump(out, f, indent=2)
-            if logger:
-                logger.info("Found a profitable combo: buy when RSI < %s, sell when RSI > %s → %s%%, %s trades.", best_entry, best_exit, f"{best_return:.2f}", best_trades)
-                logger.info("Saved settings to %s.", path)
-            return (best_entry, best_exit, best_return, best_trades)
+                    best_granularity = granularity
+    if best_entry is not None and best_granularity is not None:
+        out = {
+            "RSI_PERIOD": PERIOD,
+            "RSI_ENTRY": best_entry,
+            "RSI_EXIT": best_exit,
+            "CANDLE_GRANULARITY": best_granularity,
+        }
+        path = Path(__file__).resolve().parent.parent / "learned_params.json"
+        with open(path, "w") as f:
+            json.dump(out, f, indent=2)
+        config.secure_file(path)
         if logger:
-            logger.info("Round %s: no profitable combo, expanding search...", round_num)
+            logger.info("Best: %s, RSI < %s, RSI > %s → %s%%, %s trades. Saved to %s.",
+                best_granularity, best_entry, best_exit, f"{best_ret:.2f}", best_tr, path)
+        return (best_entry, best_exit, best_ret, best_tr)
     if logger:
-        logger.warning("No profitable combo found after all rounds. Using default settings.")
-    return None
+        logger.warning("No profitable combo across all timeframes. Using default params for display.")
+    if default_candles is None or len(default_candles) < PERIOD + 2:
+        return None
+    try:
+        from . import config as cfg
+        default_entry = getattr(cfg, "RSI_ENTRY", 30)
+        default_exit = getattr(cfg, "RSI_EXIT", 50)
+        if default_exit <= default_entry:
+            default_entry, default_exit = 30, 50
+        rsi_series = _compute_rsi_series(default_candles)
+        full_ret, full_tr, _, _ = run_backtest(
+            default_candles, default_entry, default_exit, LEARN_FEE_PCT, LEARN_SLIPPAGE_PCT, rsi_series
+        )
+        return (None, None, full_ret, full_tr)
+    except Exception:
+        return None
 
 
 def main():
@@ -128,13 +192,16 @@ def main():
     days = max(1, args.days)
     result = run_learn(days=days, logger=None)
     if result is None:
-        print("No profitable combo found after all grid rounds. Keeping defaults (no file written).")
+        print("No profitable combo found (and could not run defaults backtest). Keeping defaults.")
         sys.exit(0)
     entry, exit_, return_pct, trades = result
-    path = Path(__file__).resolve().parent.parent / "learned_params.json"
-    print(f"Best: entry={entry}, exit={exit_} -> return={return_pct:.2f}%, trades={trades}")
-    print(f"Wrote {path}")
-    print("Restart the bot (python -m src.main) to use these params.")
+    if entry is not None and exit_ is not None:
+        path = Path(__file__).resolve().parent.parent / "learned_params.json"
+        print(f"Best: entry={entry}, exit={exit_} -> backtest {return_pct:.2f}%, {trades} trades")
+        print(f"Wrote {path}")
+        print("Restart the bot (python -m src.main) to use these params.")
+    else:
+        print(f"No profitable combo found. Defaults backtest: {return_pct:.2f}%, {trades} trades. No file written.")
 
 
 if __name__ == "__main__":
