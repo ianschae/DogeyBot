@@ -28,23 +28,17 @@ Simple Dogecoin (DOGE-USD) trading bot for Coinbase Advanced Trade. Plug in your
    python -m src.main
    ```
 
-   The bot runs in a loop (every 60 seconds), fetches DOGE-USD candles and your balance, and either logs what it would do (dry-run) or places market orders. Stop with Ctrl+C.
+   Everything runs from main by default: learning (backtest on startup and every 24h), the trading loop (every 60s), and the terminal UI. The bot fetches DOGE-USD candles and your balance, then either logs what it would do (dry-run) or places market orders. Stop with Ctrl+C.
+
+   **GUI:** A doge-game style window shows score, DOGE/USD, RSI, last move, and next-check countdown. Set `UI_ENABLED=false` in `.env` to disable.
 
 Run tests: `pytest tests/`
 
-Test API connections: `python -m src.test_api`. Add `--test-order` to place one small real order ($1 buy or 1 DOGE sell), or `--test-buy` to test a $1 USD buy.
+Test API: `python -m src.test_api` (add `--test-order` or `--test-buy` for a small real order).
 
 ## Learning
 
-The bot **learns in real time**: on startup it backtests the last 60 days and picks the best RSI entry/exit. **Only if that backtest is profitable** does it use those params; otherwise it falls back to the default settings (buy when RSI &lt; 30, sell when RSI &gt; 50). While running, it re-learns every 24 hours and only switches to new params when the new backtest is profitable.
-
-You can also run learning standalone:
-
-```bash
-python -m src.learn
-```
-
-Optional: `--days 60` (default 60). Writes the best to `learned_params.json`; the next bot run will use it until the first in-run re-learn. Backtest assumes no fees by default; set `LEARN_FEE_PCT=0.5` (or similar) in `.env` for a 0.5% fee per side to make learned params more conservative.
+The bot **learns in real time** from main: on startup it backtests the last 60 days and picks the best RSI entry/exit. **Only if that backtest is profitable** does it use those params; otherwise it falls back to defaults (buy when RSI &lt; 30, sell when RSI &gt; 50). While running, it re-learns every 24 hours. Optional: run `python -m src.learn` with `--days 60` to pre-write `learned_params.json`; set `LEARN_FEE_PCT=0.5` in `.env` for a 0.5% fee per side in backtests.
 
 ## Behavior
 

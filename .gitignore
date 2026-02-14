@@ -8,3 +8,4 @@ venv/
 learned_params.json
 portfolio_state.json
 portfolio_log.csv
+status.json
