@@ -111,72 +111,111 @@ def _write_status(
         logger.debug("Could not write status file: %s", e)
 
 
+def _refresh_status_market_data() -> None:
+    """Update only price and market data in status.json so the UI sees fresh numbers between full polls."""
+    if not config.UI_ENABLED or not config.STATUS_FILE.exists():
+        return
+    try:
+        with open(config.STATUS_FILE) as f:
+            data = json.load(f)
+        if not isinstance(data, dict):
+            return
+    except (json.JSONDecodeError, OSError):
+        return
+    market = client.get_product_market_data()
+    price = market.get("price")
+    if price is not None and price > 0:
+        data["price"] = round(price, 6)
+    if market.get("change_24h_pct") is not None:
+        data["change_24h_pct"] = round(market["change_24h_pct"], 2)
+    if market.get("volume_24h") is not None:
+        data["volume_24h"] = round(market["volume_24h"], 0)
+    data["timestamp_utc"] = datetime.now(timezone.utc).isoformat()
+    try:
+        with open(config.STATUS_FILE, "w") as f:
+            json.dump(data, f, indent=2)
+        config.secure_file(config.STATUS_FILE)
+    except OSError as e:
+        logger.debug("Could not refresh status: %s", e)
+
+
 def _bot_loop(strategy: RSIMeanReversion) -> None:
     """Run the trading loop until _shutdown is set. Used in a thread when GUI is on main thread."""
     last_learn_time = time.time()
+    last_full_check = time.time() - config.POLL_INTERVAL_SECONDS  # run full check soon
+    last_status_refresh = 0.0
     while not _shutdown:
-        try:
-            if time.time() - last_learn_time >= config.LEARN_INTERVAL_SECONDS:
-                logger.info("Time to re-check the best settings (running the backtest again)...")
-                learned = learn.run_learn(days=config.LEARN_DAYS, logger=logger)
-                last_learn_time = time.time()
-                if learned is not None:
-                    entry, exit_, return_pct, trades = learned
-                    period = learn.PERIOD
-                    strategy.period = period
-                    strategy.entry = entry
-                    strategy.exit = exit_
-                    logger.info("Updated settings: buy when RSI < %s, sell when RSI > %s. Backtest: %s%% (%s trades).", entry, exit_, f"{return_pct:.2f}", trades)
-            logger.info("---")
-            logger.info("Checking the market and your balance...")
-            candles = client.get_closed_candles(config.CANDLES_COUNT)
-            if len(candles) < strategy.period + 2:
-                logger.warning("Not enough price history yet (%s candles, need at least %s). Skipping this round.", len(candles), strategy.period + 2)
-                _sleep_until_shutdown(config.POLL_INTERVAL_SECONDS)
-                continue
-            doge, usd = client.get_doge_and_usd_balances()
-            in_position = float(doge) >= config.MIN_BASE_SIZE_DOGE
-            portfolio_value = gain_usd = gain_pct = 0.0
-            peak = drawdown_pct = days_tracked = avg_daily_gain_pct = avg_daily_gain_usd = 0.0
+        now = time.time()
+        # Refresh price/market data in status every STATUS_REFRESH_SECONDS so the UI sees things change
+        if config.UI_ENABLED and now - last_status_refresh >= config.STATUS_REFRESH_SECONDS:
+            _refresh_status_market_data()
+            last_status_refresh = now
+        if now - last_full_check >= config.POLL_INTERVAL_SECONDS:
             try:
-                candle_price = float(candles[-1].get("close", 0))
-            except (TypeError, ValueError):
-                candle_price = 0.0
-            if candle_price <= 0:
-                logger.warning("Invalid or missing close price; skipping this round.")
-                _sleep_until_shutdown(config.POLL_INTERVAL_SECONDS)
-                continue
-            # Use current product price and market data for display; fall back to candle close if API fails
-            market = client.get_product_market_data()
-            display_price = market.get("price")
-            if display_price is None or display_price <= 0:
-                display_price = candle_price
-            change_24h_pct = market.get("change_24h_pct")
-            volume_24h = market.get("volume_24h")
-            try:
-                (portfolio_value, gain_usd, gain_pct, peak, drawdown_pct,
-                 days_tracked, avg_daily_gain_pct, avg_daily_gain_usd) = portfolio_log.record(doge, usd, candle_price)
-                logger.info("Balance: %s DOGE, %s USD. Holding DOGE: %s.", doge, usd, in_position)
-                logger.info("Portfolio: $%.2f (gain $%.2f / %s%%); peak $%.2f; %s days; avg daily %s%% / $%.2f.",
-                    portfolio_value, gain_usd, f"{gain_pct:.2f}", peak, f"{days_tracked:.1f}", f"{avg_daily_gain_pct:.2f}", avg_daily_gain_usd)
+                if time.time() - last_learn_time >= config.LEARN_INTERVAL_SECONDS:
+                    logger.info("Time to re-check the best settings (running the backtest again)...")
+                    learned = learn.run_learn(days=config.LEARN_DAYS, logger=logger)
+                    last_learn_time = time.time()
+                    if learned is not None:
+                        entry, exit_, return_pct, trades = learned
+                        period = learn.PERIOD
+                        strategy.period = period
+                        strategy.entry = entry
+                        strategy.exit = exit_
+                        logger.info("Updated settings: buy when RSI < %s, sell when RSI > %s. Backtest: %s%% (%s trades).", entry, exit_, f"{return_pct:.2f}", trades)
+                logger.info("---")
+                logger.info("Checking the market and your balance...")
+                candles = client.get_closed_candles(config.CANDLES_COUNT)
+                if len(candles) < strategy.period + 2:
+                    logger.warning("Not enough price history yet (%s candles, need at least %s). Skipping this round.", len(candles), strategy.period + 2)
+                    last_full_check = now
+                    _sleep_until_shutdown(1)
+                    continue
+                doge, usd = client.get_doge_and_usd_balances()
+                in_position = float(doge) >= config.MIN_BASE_SIZE_DOGE
+                portfolio_value = gain_usd = gain_pct = 0.0
+                peak = drawdown_pct = days_tracked = avg_daily_gain_pct = avg_daily_gain_usd = 0.0
+                try:
+                    candle_price = float(candles[-1].get("close", 0))
+                except (TypeError, ValueError):
+                    candle_price = 0.0
+                if candle_price <= 0:
+                    logger.warning("Invalid or missing close price; skipping this round.")
+                    last_full_check = now
+                    _sleep_until_shutdown(1)
+                    continue
+                market = client.get_product_market_data()
+                display_price = market.get("price")
+                if display_price is None or display_price <= 0:
+                    display_price = candle_price
+                change_24h_pct = market.get("change_24h_pct")
+                volume_24h = market.get("volume_24h")
+                try:
+                    (portfolio_value, gain_usd, gain_pct, peak, drawdown_pct,
+                     days_tracked, avg_daily_gain_pct, avg_daily_gain_usd) = portfolio_log.record(doge, usd, candle_price)
+                    logger.info("Balance: %s DOGE, %s USD. Holding DOGE: %s.", doge, usd, in_position)
+                    logger.info("Portfolio: $%.2f (gain $%.2f / %s%%); peak $%.2f; %s days; avg daily %s%% / $%.2f.",
+                        portfolio_value, gain_usd, f"{gain_pct:.2f}", peak, f"{days_tracked:.1f}", f"{avg_daily_gain_pct:.2f}", avg_daily_gain_usd)
+                except Exception as e:
+                    logger.warning("Portfolio snapshot skipped: %s", e)
+                    logger.info("Balance: %s DOGE, %s USD. Holding DOGE: %s.", doge, usd, in_position)
+                sig = strategy.get_signal(candles, in_position)
+                logger.info("Decision: %s.", sig)
+                engine.run(sig, doge, usd)
+                _write_status(
+                    float(doge), float(usd), in_position, sig,
+                    portfolio_value, gain_usd, gain_pct, peak, drawdown_pct, days_tracked, avg_daily_gain_pct, avg_daily_gain_usd,
+                    display_price, candles, strategy.period,
+                    strategy.entry, strategy.exit, last_learn_time,
+                    change_24h_pct=change_24h_pct,
+                    volume_24h=volume_24h,
+                )
+                last_full_check = time.time()
+                logger.info("Next check in %s seconds.", config.POLL_INTERVAL_SECONDS)
             except Exception as e:
-                logger.warning("Portfolio snapshot skipped: %s", e)
-                logger.info("Balance: %s DOGE, %s USD. Holding DOGE: %s.", doge, usd, in_position)
-            sig = strategy.get_signal(candles, in_position)
-            logger.info("Decision: %s.", sig)
-            engine.run(sig, doge, usd)
-            _write_status(
-                float(doge), float(usd), in_position, sig,
-                portfolio_value, gain_usd, gain_pct, peak, drawdown_pct, days_tracked, avg_daily_gain_pct, avg_daily_gain_usd,
-                display_price, candles, strategy.period,
-                strategy.entry, strategy.exit, last_learn_time,
-                change_24h_pct=change_24h_pct,
-                volume_24h=volume_24h,
-            )
-            logger.info("Next check in %s seconds.", config.POLL_INTERVAL_SECONDS)
-        except Exception as e:
-            logger.exception("Something went wrong: %s", e)
-        _sleep_until_shutdown(config.POLL_INTERVAL_SECONDS)
+                logger.exception("Something went wrong: %s", e)
+                last_full_check = now
+        _sleep_until_shutdown(1)
     logger.info("Stopped.")
 
 

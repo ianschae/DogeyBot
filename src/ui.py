@@ -430,6 +430,8 @@ def run_gui(shutdown_event) -> None:
 
     mode_label = tk.Label(root, text="", font=font_label, bg=bg, fg=fg_muted)
     mode_label.pack(pady=(pad_md, 0))
+    updated_ago_label = tk.Label(root, text="", font=font_label, bg=bg, fg=fg_muted)
+    updated_ago_label.pack(pady=(2, 0))
 
     def fmt(n):
         if n is None:
@@ -525,6 +527,22 @@ def run_gui(shutdown_event) -> None:
         mode_label.config(
             text="such dry run. no order. wow." if s.get("dry_run") else "very live. much trade." if s.get("allow_live") else "live off. such safe."
         )
+        ts = s.get("timestamp_utc")
+        if ts:
+            try:
+                from datetime import datetime
+                then = datetime.fromisoformat(ts.replace("Z", "+00:00")).timestamp()
+                ago = int(time.time() - then)
+                if ago < 60:
+                    updated_ago_label.config(text=f"Updated {ago}s ago")
+                elif ago < 3600:
+                    updated_ago_label.config(text=f"Updated {ago // 60}m ago")
+                else:
+                    updated_ago_label.config(text=f"Updated {ago // 3600}h ago")
+            except Exception:
+                updated_ago_label.config(text="")
+        else:
+            updated_ago_label.config(text="")
         now_ui = time.time()
         if now_ui < party_mode_until[0]:
             if now_ui >= party_phrase_until[0]:

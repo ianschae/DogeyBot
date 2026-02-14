@@ -54,6 +54,7 @@ def _int_env(name: str, default: int) -> int:
 ORDER_COOLDOWN_SECONDS = _int_env("ORDER_COOLDOWN_SECONDS", 300)
 CANDLES_COUNT = 36  # fetch 36, use last 35 closed
 POLL_INTERVAL_SECONDS = _int_env("POLL_INTERVAL_SECONDS", 60)
+STATUS_REFRESH_SECONDS = _int_env("STATUS_REFRESH_SECONDS", 15)  # refresh price/market data in status for UI
 LEARN_DAYS = _int_env("LEARN_DAYS", 60)
 LEARN_INTERVAL_SECONDS = _int_env("LEARN_INTERVAL_SECONDS", 24 * 3600)
 
