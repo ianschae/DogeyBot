@@ -17,8 +17,8 @@ INITIAL_USD = 1000.0
 
 # Require at least one trade so we don't pick "no trades" as best.
 MIN_TRADES = 1
-# Backtest for learning assumes zero fees and zero slippage (find best raw strategy).
-LEARN_FEE_PCT = 0.0
+# Backtest for learning: 0.6% per side (Coinbase maker / post-only limit).
+LEARN_FEE_PCT = 0.6
 LEARN_SLIPPAGE_PCT = 0.0
 
 # Grid: search every integer (entry, exit) with entry < exit in a wide RSI range.
@@ -112,8 +112,8 @@ def run_learn(days: int = LEARN_DAYS, logger=None) -> Optional[tuple[int | None,
     on each. Pick the single (granularity, entry, exit) with highest return > 0. Write learned_params.json
     including CANDLE_GRANULARITY. If none profitable, return (None, None, default_ret, default_tr) for UI."""
     if logger:
-        logger.info("Pulling all backdata across timeframes %s (max 350 candles each, 0%% fees/slippage)...",
-            LEARN_GRANULARITIES)
+        logger.info("Pulling all backdata across timeframes %s (max 350 candles each, %.1f%% fee per side)...",
+            LEARN_GRANULARITIES, LEARN_FEE_PCT)
     best_ret = None
     best_tr = 0
     best_entry = None
