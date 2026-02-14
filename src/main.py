@@ -187,7 +187,7 @@ def _bot_loop(strategy: RSIMeanReversion) -> None:
                             logger.info("Re-ran backtest: %s%%, %s trades (no profitable combo, keeping current RSI).", f"{return_pct:.2f}", trades)
                 logger.info("---")
                 logger.info("Checking the market and your balance...")
-                candles = client.get_closed_candles(config.CANDLES_COUNT)
+                candles = client.get_closed_candles(config.CANDLES_COUNT, config.CANDLE_GRANULARITY)
                 if len(candles) < strategy.period + 2:
                     logger.warning("Not enough price history yet (%s candles, need at least %s). Skipping this round.", len(candles), strategy.period + 2)
                     last_full_check = now

@@ -10,8 +10,20 @@ from . import config
 
 logger = logging.getLogger(__name__)
 
-# SIX_HOUR in seconds for closed-candle cutoff
-GRANULARITY_SECONDS = {"SIX_HOUR": 6 * 3600, "ONE_DAY": 24 * 3600}
+# Granularity name -> seconds per candle (for closed-candle cutoff and history range)
+GRANULARITY_SECONDS = {
+    "ONE_MINUTE": 60,
+    "FIVE_MINUTE": 5 * 60,
+    "FIFTEEN_MINUTE": 15 * 60,
+    "THIRTY_MINUTE": 30 * 60,
+    "ONE_HOUR": 3600,
+    "TWO_HOUR": 2 * 3600,
+    "FOUR_HOUR": 4 * 3600,
+    "SIX_HOUR": 6 * 3600,
+    "ONE_DAY": 24 * 3600,
+}
+# Max candles per API request (Coinbase limit)
+CANDLES_PER_REQUEST = 350
 
 
 def _retry(fn, max_attempts: int = 3, delay_sec: float = 2):
@@ -111,15 +123,16 @@ def get_product_market_data() -> dict:
     return out
 
 
-def get_closed_candles(count: int = None) -> list[dict]:
+def get_closed_candles(count: int = None, granularity: str | None = None) -> list[dict]:
     """Fetch DOGE-USD candles and return only closed ones, sorted ascending by time.
     Returns list of dicts with keys: start, open, high, low, close, volume.
+    granularity: override config (e.g. from learned_params); must be in GRANULARITY_SECONDS.
     """
     count = count or config.CANDLES_COUNT
+    gran = granularity or config.CANDLE_GRANULARITY
     client = _client()
     end_ts = int(time.time())
-    granularity_sec = GRANULARITY_SECONDS.get(config.CANDLE_GRANULARITY, 6 * 3600)
-    # Request enough range to get at least `count` candles; end before now so last candle is closed
+    granularity_sec = GRANULARITY_SECONDS.get(gran, 6 * 3600)
     start_ts = end_ts - (count + 2) * granularity_sec
     start_str = str(start_ts)
     end_str = str(end_ts)
@@ -129,7 +142,7 @@ def get_closed_candles(count: int = None) -> list[dict]:
             product_id=config.PRODUCT_ID,
             start=start_str,
             end=end_str,
-            granularity=config.CANDLE_GRANULARITY,
+            granularity=gran,
         )
 
     try:
@@ -138,7 +151,6 @@ def get_closed_candles(count: int = None) -> list[dict]:
         logger.exception("Couldn't fetch candles: %s", e)
         return []
     out = _parse_candle_response(resp)
-    # Only closed: candle's end = start + granularity_sec; must be < now
     cutoff = end_ts - granularity_sec
     out = [c for c in out if (c["start"] + granularity_sec) <= cutoff]
     out.sort(key=lambda c: c["start"])
@@ -193,6 +205,14 @@ def get_candles_range(start_ts: int, end_ts: int, granularity: str = "SIX_HOUR")
     out = _parse_candle_response(resp)
     out.sort(key=lambda c: c["start"])
     return out
+
+
+def get_candles_max_history(granularity: str, max_candles: int = CANDLES_PER_REQUEST) -> list[dict]:
+    """Fetch up to max_candles of the most recent DOGE-USD candles for the given granularity. Sorted ascending."""
+    end_ts = int(time.time())
+    sec = GRANULARITY_SECONDS.get(granularity, 6 * 3600)
+    start_ts = end_ts - max_candles * sec
+    return get_candles_range(start_ts, end_ts, granularity)
 
 
 def _order_id() -> str:

@@ -19,8 +19,12 @@ ALLOW_LIVE = os.environ.get("ALLOW_LIVE", "false").strip().lower() in ("true", "
 # Hardcoded for v1
 PRODUCT_ID = "DOGE-USD"
 CANDLE_GRANULARITY = "SIX_HOUR"
+_VALID_GRANULARITIES = frozenset((
+    "ONE_MINUTE", "FIVE_MINUTE", "FIFTEEN_MINUTE", "THIRTY_MINUTE",
+    "ONE_HOUR", "TWO_HOUR", "FOUR_HOUR", "SIX_HOUR", "ONE_DAY",
+))
 
-# RSI params: load from learned_params.json if present, else defaults
+# RSI params (and optional CANDLE_GRANULARITY) from learned_params.json if present
 _LEARNED_PARAMS_PATH = Path(__file__).resolve().parent.parent / "learned_params.json"
 _default_period, _default_entry, _default_exit = 14, 30, 50
 RSI_PERIOD = _default_period
@@ -40,6 +44,9 @@ if _LEARNED_PARAMS_PATH.exists():
             RSI_ENTRY = e
             RSI_EXIT = x
             RSI_PARAMS_SOURCE = "learned_params.json"
+        g = learned.get("CANDLE_GRANULARITY")
+        if isinstance(g, str) and g.strip() in _VALID_GRANULARITIES:
+            CANDLE_GRANULARITY = g.strip()
     except (json.JSONDecodeError, OSError):
         pass
 
