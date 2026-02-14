@@ -36,6 +36,17 @@ Run tests: `pytest tests/`
 
 Test API: `python -m src.test_api` (add `--test-order` or `--test-buy` for a small real order).
 
+## Trading strategy
+
+The bot uses **RSI mean reversion** with standard **Wilder RSI(14)**:
+
+- **RSI:** Wilder’s smoothing over the last 14 closes of 6-hour candles: first average gain/loss is the simple average of the first 14 changes, then each new value is smoothed with `avg = (prev_avg * 13 + current) / 14`. RSI = `100 - 100/(1 + RS)` where RS = average gain / average loss.
+- **Signal:** Binary (in or out). **Buy** when not in position and RSI &lt; entry (oversold). **Sell** when in position and RSI &gt; exit (recovered). Otherwise **hold**.
+- **Entry/exit:** Default 30/50. The learning step backtests the last 60 days and, if profitable, picks the best (entry, exit) from a small grid and saves them to `learned_params.json`; the bot uses those until the next re-learn (e.g. every 24h).
+- **Execution:** On buy it uses all available USD (market buy); on sell it uses all DOGE (market sell). Min order size and a cooldown between orders apply. No stop-loss beyond the RSI exit level.
+
+So: classic Wilder RSI(14) on 6h DOGE-USD, mean-reversion rules, all-in per signal, with learned or default thresholds.
+
 ## Learning
 
 The bot **learns in real time** from main: on startup it backtests the last 60 days and picks the best RSI entry/exit. **Only if that backtest is profitable** does it use those params; otherwise it falls back to defaults (buy when RSI &lt; 30, sell when RSI &gt; 50). While running, it re-learns every 24 hours. Optional: run `python -m src.learn` with `--days 60` to pre-write `learned_params.json`; set `LEARN_FEE_PCT=0.5` in `.env` for a 0.5% fee per side in backtests.
