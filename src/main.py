@@ -68,6 +68,7 @@ def _write_status(
     backtest_return_pct: float | None = None,
     backtest_trades: int | None = None,
     backtest_days: int | None = None,
+    backtest_granularity: str | None = None,
 ) -> None:
     """Write status.json for the UI (only when UI_ENABLED)."""
     if not config.UI_ENABLED:
@@ -113,6 +114,8 @@ def _write_status(
         payload["backtest_trades"] = backtest_trades
     if backtest_days is not None:
         payload["backtest_days"] = backtest_days
+    if backtest_granularity is not None:
+        payload["backtest_granularity"] = backtest_granularity
     try:
         config.STATUS_FILE.parent.mkdir(parents=True, exist_ok=True)
         tmp = config.STATUS_FILE.with_suffix(config.STATUS_FILE.suffix + ".tmp")
@@ -234,6 +237,7 @@ def _bot_loop(strategy: RSIMeanReversion) -> None:
                     backtest_return_pct=_last_backtest[0],
                     backtest_trades=_last_backtest[1],
                     backtest_days=config.LEARN_DAYS,
+                    backtest_granularity=config.CANDLE_GRANULARITY,
                 )
                 last_full_check = time.time()
                 logger.info("Next check in %s seconds.", config.POLL_INTERVAL_SECONDS)
