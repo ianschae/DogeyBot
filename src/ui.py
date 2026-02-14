@@ -357,19 +357,26 @@ def run_gui(shutdown_event) -> None:
     backtest_result_label = tk.Label(bars_f, text="", font=font_label, bg=bg, fg=fg_muted)
     backtest_result_label.pack(anchor=tk.W, pady=(0, pad_lg))
 
-    # Coin rain: fall from very top, full width, with depth (some in front, some behind)
+    # Coin rain + party mode: more coins when party is on, floating popups, more phrases
     import random
 
     click_times = []
     party_mode_until = [0.0]
-    PARTY_CLICKS = 6
-    PARTY_WINDOW = 1.0
-    PARTY_DURATION = 15.0
+    PARTY_CLICKS = 4
+    PARTY_WINDOW = 1.5
+    PARTY_DURATION = 22.0
+    COINS_NORMAL = 2
+    COINS_PARTY = 10
+    PARTY_SPEED_MULT = 1.6
     DOGE_PARTY_PHRASES = (
         "WOW", "such party", "many coins", "very wow", "so rich", "much coin",
         "very party", "such wow", "many wow", "doge party", "to the moon",
         "so wow", "much party", "very rich", "such coins", "wow wow WOW",
+        "diamond paws", "much profit", "very gains", "such moon", "many wow",
+        "to the moon!", "HODL", "very rich", "so moon", "much party mode",
     )
+    CLICK_POPUPS = ("WOW", "💎", "🐕", "much", "wow", "$$", "moon")
+    POPUP_COLORS = ("#c9a227", "#e6b800", "#2d8a3e", "#c0392b", "#8e44ad", "#2980b9", "#d35400", "#16a085", "#c0392b", "#27ae60")
 
     def fall_step(cid):
         try:
@@ -386,33 +393,57 @@ def run_gui(shutdown_event) -> None:
         except tk.TclError:
             coin_data.pop(cid, None)
 
-    def spawn_one_coin():
+    def spawn_one_coin(speed_mult=1.0):
         if not coin_photos_by_layer:
             return
         w = coin_canvas.winfo_width() or 520
         layer = random.randint(0, min(2, len(coin_photos_by_layer) - 1))
-        photo, size, speed = coin_photos_by_layer[layer]
+        photo, size, base_speed = coin_photos_by_layer[layer]
+        speed = max(2, int(base_speed * speed_mult))
         x = random.randint(0, w) if w > 0 else random.randint(0, 520)
         cid = coin_canvas.create_image(x, -size - 10, image=photo, tags=("coin", f"layer{layer}"))
         coin_data[cid] = {"speed": speed, "layer": layer}
         coin_canvas.tag_lower("layer0")
         coin_canvas.tag_raise("layer2")
-        root.after(COIN_FALL_MS, lambda: fall_step(cid))
+        root.after(COIN_FALL_MS, lambda c=cid: fall_step(c))
+
+    def spawn_click_popup():
+        """Short-lived popup at a random position with a random color."""
+        try:
+            w = coin_canvas.winfo_width() or 520
+            h = coin_canvas.winfo_height() or 720
+            x = random.randint(50, max(51, w - 50))
+            y = random.randint(50, max(51, h - 50))
+            text = random.choice(CLICK_POPUPS)
+            color = random.choice(POPUP_COLORS)
+            tid = coin_canvas.create_text(x, y, text=text, font=("Comic Sans MS", 24, "bold"), fill=color, tags=("popup",))
+            coin_canvas.tag_raise(tid)
+            def remove():
+                try:
+                    coin_canvas.delete(tid)
+                except tk.TclError:
+                    pass
+            root.after(900, remove)
+        except (tk.TclError, ValueError):
+            pass
 
     def spawn_coin():
         now = time.time()
         click_times[:] = [t for t in click_times if now - t < PARTY_WINDOW]
         click_times.append(now)
+        is_party = now < party_mode_until[0]
         if len(click_times) >= PARTY_CLICKS and now > party_mode_until[0]:
             party_mode_until[0] = now + PARTY_DURATION
-        if now < party_mode_until[0]:
-            for _ in range(5):
-                spawn_one_coin()
-        else:
-            spawn_one_coin()
+            is_party = True
+        n = COINS_PARTY if is_party else COINS_NORMAL
+        mult = PARTY_SPEED_MULT if is_party else 1.0
+        for _ in range(n):
+            spawn_one_coin(speed_mult=mult)
+        spawn_click_popup()
 
-    # Party label and coin button (same warm palette)
-    party_label = tk.Label(root, text="", font=font_party, bg=bg, fg=fg_accent)
+    # Party phrase: always in layout (fixed height) to avoid glitch when toggling
+    party_label = tk.Label(root, text="", font=font_party, bg=bg, fg=fg_accent, height=1)
+    party_label.pack(pady=(4, 2))
     party_phrase_until = [0.0]
 
     btn_canvas = tk.Canvas(root, width=320, height=56, bg=bg, highlightthickness=0, cursor="hand2")
@@ -583,11 +614,10 @@ def run_gui(shutdown_event) -> None:
         now_ui = time.time()
         if now_ui < party_mode_until[0]:
             if now_ui >= party_phrase_until[0]:
-                party_phrase_until[0] = now_ui + 0.5
+                party_phrase_until[0] = now_ui + 0.35
                 party_label.config(text=random.choice(DOGE_PARTY_PHRASES), fg=fg_accent)
-            party_label.pack(pady=(4, 2))
         else:
-            party_label.pack_forget()
+            party_label.config(text="")
         root.after(1000, update_gui)
 
     root.after(500, update_gui)
