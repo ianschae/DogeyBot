@@ -211,6 +211,26 @@ def _load_coin_image(size=48):
     return ImageTk.PhotoImage(img)
 
 
+def _load_coin_images_for_depth():
+    """Load three coin sizes for depth (back=small, front=large). Returns list of (PhotoImage, size, speed)."""
+    sizes = (26, 40, 56)
+    speeds = (3, 5, 8)
+    out = []
+    for size, speed in zip(sizes, speeds):
+        ph = _load_coin_image(size)
+        if ph is not None:
+            out.append((ph, size, speed))
+    if not out:
+        return []
+    # If only one loaded, use it for all layers
+    if len(out) == 1:
+        ph, sz, sp = out[0]
+        return [(ph, sz, 3), (ph, sz, 5), (ph, sz, 8)]
+    while len(out) < 3:
+        out.append(out[-1])
+    return out[:3]
+
+
 def run_gui(shutdown_event) -> None:
     """Run the desktop GUI: big clicker-game style, all numbers from real status."""
     import tkinter as tk
@@ -222,6 +242,14 @@ def run_gui(shutdown_event) -> None:
     root.minsize(520, 720)
     root.resizable(True, True)
     root.configure(bg="#fffbf0", padx=24, pady=24)
+
+    # Full-window coin layer (behind everything): coins fall from top, full width, with depth
+    coin_canvas = tk.Canvas(root, bg="#fffbf0", highlightthickness=0)
+    coin_canvas.place(relx=0, rely=0, relwidth=1, relheight=1)
+    coin_photos_by_layer = _load_coin_images_for_depth()
+    coin_refs = [p[0] for p in coin_photos_by_layer]
+    coin_data = {}  # cid -> {"speed": int, "layer": int} for fall_step
+    COIN_FALL_MS = 35
 
     # Load and show multiple Doge images (keep refs so they aren’t GC’d)
     doge_photos = _load_doge_images(max_size=200, small_size=72)
@@ -298,34 +326,68 @@ def run_gui(shutdown_event) -> None:
     learn_value_label = tk.Label(root, text="—", font=font_label, bg="#fffbf0", fg="#3d2914")
     learn_value_label.pack(anchor=tk.W, pady=(0, 12))
 
-    # Coin rain canvas (coins fall from top)
-    coin_canvas = tk.Canvas(root, width=480, height=160, bg="#fffbf0", highlightthickness=0)
-    coin_canvas.pack(pady=(8, 4))
-    coin_photo = _load_coin_image(size=44)
-    coin_refs = [coin_photo] if coin_photo else []
-    FALL_SPEED = 6
-    COIN_FALL_MS = 35
+    # Coin rain: fall from very top, full width, with depth (some in front, some behind)
+    import random
+
+    click_times = []
+    party_mode_until = [0.0]
+    PARTY_CLICKS = 6
+    PARTY_WINDOW = 1.0
+    PARTY_DURATION = 15.0
+    DOGE_PARTY_PHRASES = (
+        "WOW", "such party", "many coins", "very wow", "so rich", "much coin",
+        "very party", "such wow", "many wow", "doge party", "to the moon",
+        "so wow", "much party", "very rich", "such coins", "wow wow WOW",
+    )
 
     def fall_step(cid):
         try:
-            coin_canvas.move(cid, 0, FALL_SPEED)
+            data = coin_data.get(cid)
+            speed = data["speed"] if data else 5
+            coin_canvas.move(cid, 0, speed)
             x, y = coin_canvas.coords(cid)
-            if y < 180:
+            h = coin_canvas.winfo_height() or 720
+            if y < h + 60:
                 root.after(COIN_FALL_MS, lambda c=cid: fall_step(c))
             else:
                 coin_canvas.delete(cid)
+                coin_data.pop(cid, None)
         except tk.TclError:
-            pass
+            coin_data.pop(cid, None)
 
-    def spawn_coin():
-        if not coin_photo:
+    def spawn_one_coin():
+        if not coin_photos_by_layer:
             return
-        import random
-        x = random.randint(30, 450)
-        cid = coin_canvas.create_image(x, -22, image=coin_photo, tags="coin")
+        w = coin_canvas.winfo_width() or 520
+        layer = random.randint(0, min(2, len(coin_photos_by_layer) - 1))
+        photo, size, speed = coin_photos_by_layer[layer]
+        x = random.randint(0, w) if w > 0 else random.randint(0, 520)
+        cid = coin_canvas.create_image(x, -size - 10, image=photo, tags=("coin", f"layer{layer}"))
+        coin_data[cid] = {"speed": speed, "layer": layer}
+        coin_canvas.tag_lower("layer0")
+        coin_canvas.tag_raise("layer2")
         root.after(COIN_FALL_MS, lambda: fall_step(cid))
 
+    def spawn_coin():
+        now = time.time()
+        click_times[:] = [t for t in click_times if now - t < PARTY_WINDOW]
+        click_times.append(now)
+        if len(click_times) >= PARTY_CLICKS and now > party_mode_until[0]:
+            party_mode_until[0] = now + PARTY_DURATION
+        if now < party_mode_until[0]:
+            for _ in range(5):
+                spawn_one_coin()
+        else:
+            spawn_one_coin()
+
     # Rounded, high-visibility button (Canvas with rounded rect + text)
+    party_label = tk.Label(root, text="", font=("Comic Sans MS", 20, "bold"), bg="#fffbf0", fg="#c9a227")
+    try:
+        party_label.config(font=("Comic Sans MS", 20, "bold"))
+    except tk.TclError:
+        party_label.config(font=("Helvetica", 20, "bold"))
+    party_phrase_until = [0.0]
+
     btn_canvas = tk.Canvas(root, width=320, height=56, bg="#fffbf0", highlightthickness=0, cursor="hand2")
     btn_canvas.pack(pady=(6, 8))
 
@@ -339,7 +401,10 @@ def run_gui(shutdown_event) -> None:
 
     draw_rounded_rect(btn_canvas, 4, 4, 316, 52, 14, "#e6b800", "#8b6914", 3)
     btn_canvas.create_text(160, 28, text="Much click. Wow coins.", font=font_stat, fill="#3d2914")
-    btn_canvas.bind("<Button-1>", lambda e: spawn_coin())
+    def on_coin_click(e):
+        spawn_coin()
+
+    btn_canvas.bind("<Button-1>", on_coin_click)
 
     mode_label = tk.Label(root, text="", font=font_label, bg="#fffbf0", fg="#8b7355")
     mode_label.pack(pady=(8, 0))
@@ -416,6 +481,14 @@ def run_gui(shutdown_event) -> None:
         mode_label.config(
             text="such dry run. no order. wow." if s.get("dry_run") else "very live. much trade." if s.get("allow_live") else "live off. such safe."
         )
+        now_ui = time.time()
+        if now_ui < party_mode_until[0]:
+            if now_ui >= party_phrase_until[0]:
+                party_phrase_until[0] = now_ui + 0.5
+                party_label.config(text=random.choice(DOGE_PARTY_PHRASES), fg="#c9a227")
+            party_label.pack(pady=(4, 2))
+        else:
+            party_label.pack_forget()
         root.after(1000, update_gui)
 
     root.after(500, update_gui)
