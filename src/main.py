@@ -213,11 +213,13 @@ def _bot_loop(strategy: RSIMeanReversion) -> None:
                 display_price = market.get("price")
                 if display_price is None or display_price <= 0:
                     display_price = candle_price
+                # Use current market price for portfolio value (not last candle close) so value is accurate
+                price_for_portfolio = display_price
                 change_24h_pct = market.get("change_24h_pct")
                 volume_24h = market.get("volume_24h")
                 try:
                     (portfolio_value, gain_usd, gain_pct, peak, drawdown_pct,
-                     days_tracked, avg_daily_gain_pct, avg_daily_gain_usd) = portfolio_log.record(doge, usd, candle_price)
+                     days_tracked, avg_daily_gain_pct, avg_daily_gain_usd) = portfolio_log.record(doge, usd, price_for_portfolio)
                     logger.info("Balance: %s DOGE, %s USD. Holding DOGE: %s.", doge, usd, in_position)
                     logger.info("Portfolio: $%.2f (gain $%.2f / %s%%); peak $%.2f; %s days; avg daily %s%% / $%.2f.",
                         portfolio_value, gain_usd, f"{gain_pct:.2f}", peak, f"{days_tracked:.1f}", f"{avg_daily_gain_pct:.2f}", avg_daily_gain_usd)

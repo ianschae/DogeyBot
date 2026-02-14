@@ -1,7 +1,7 @@
-"""Tests for RSI Wilder calculation."""
+"""Tests for RSI Wilder calculation and signal logic."""
 import pytest
 
-from src.strategies.rsi_mean_reversion import _rsi_wilder
+from src.strategies.rsi_mean_reversion import _rsi_wilder, signal_from_rsi
 
 
 def test_rsi_wilder_not_enough_data_returns_none():
@@ -28,3 +28,24 @@ def test_rsi_wilder_known_sequence():
     rsi = _rsi_wilder(closes, 14)
     assert rsi is not None
     assert 0 < rsi <= 100
+
+
+def test_signal_from_rsi_buy_when_flat_and_oversold():
+    assert signal_from_rsi(25, 30, 50, False) == "buy"
+    assert signal_from_rsi(29, 30, 50, False) == "buy"
+
+
+def test_signal_from_rsi_no_buy_when_in_position():
+    assert signal_from_rsi(25, 30, 50, True) == "hold"
+
+
+def test_signal_from_rsi_sell_when_in_position_and_over_exit():
+    assert signal_from_rsi(55, 30, 50, True) == "sell"
+    assert signal_from_rsi(51, 30, 50, True) == "sell"
+
+
+def test_signal_from_rsi_hold():
+    assert signal_from_rsi(40, 30, 50, False) == "hold"
+    assert signal_from_rsi(40, 30, 50, True) == "hold"
+    assert signal_from_rsi(30, 30, 50, False) == "hold"  # need strictly < entry to buy
+    assert signal_from_rsi(50, 30, 50, True) == "hold"  # need strictly > exit to sell

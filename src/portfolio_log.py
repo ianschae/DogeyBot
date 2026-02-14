@@ -62,7 +62,7 @@ def _save_peak(peak: float, started_at: str) -> None:
 
 
 def record(doge: float, usd: float, price: float) -> tuple[float, float, float, float, float, float, float, float]:
-    """Record current portfolio snapshot. Price = DOGE-USD (e.g. last candle close).
+    """Record current portfolio snapshot. Price = DOGE-USD (use current market price for accurate value).
     Returns (portfolio_value_usd, gain_usd, gain_pct, peak_usd, drawdown_pct, days_tracked, avg_daily_gain_pct, avg_daily_gain_usd)."""
     doge = float(doge)
     usd = float(usd)

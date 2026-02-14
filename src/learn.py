@@ -8,7 +8,7 @@ from typing import Optional
 
 from . import client
 from . import config
-from .strategies.rsi_mean_reversion import _rsi_wilder
+from .strategies.rsi_mean_reversion import _rsi_wilder, signal_from_rsi
 
 PERIOD = 14
 LEARN_DAYS = config.LEARN_DAYS
@@ -78,14 +78,15 @@ def run_backtest(
         if close_price <= 0:
             continue
         in_position = doge > 0
-        if not in_position and rsi < entry:
+        sig = signal_from_rsi(rsi, entry, exit_, in_position)
+        if sig == "buy":
             usd_after_fee = usd * (1.0 - fee_pct / 100.0)
             # Post-only limit: buy below mid (better price)
             fill_buy = close_price * (1.0 - maker_offset_pct / 100.0) * (1.0 + slippage_pct / 100.0)
             doge = usd_after_fee / fill_buy
             usd = 0.0
             trades += 1
-        elif in_position and rsi > exit_:
+        elif sig == "sell":
             # Post-only limit: sell above mid (better price)
             fill_sell = close_price * (1.0 + maker_offset_pct / 100.0) * (1.0 - slippage_pct / 100.0)
             usd = doge * fill_sell * (1.0 - fee_pct / 100.0)

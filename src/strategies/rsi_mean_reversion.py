@@ -29,6 +29,15 @@ def _rsi_wilder(closes: list[float], period: int = 14) -> float | None:
     return 100.0 - (100.0 / (1.0 + rs))
 
 
+def signal_from_rsi(rsi: float, entry: int, exit_threshold: int, in_position: bool) -> str:
+    """Single source of truth for buy/sell/hold. Used by both live strategy and backtest."""
+    if not in_position and rsi < entry:
+        return "buy"
+    if in_position and rsi > exit_threshold:
+        return "sell"
+    return "hold"
+
+
 class RSIMeanReversion(BaseStrategy):
     def __init__(self, period: int = 14, entry: int = 30, exit: int = 50):
         self.period = period
@@ -50,11 +59,11 @@ class RSIMeanReversion(BaseStrategy):
         if rsi is None:
             return "hold"
         logger.info("RSI is %.1f. (We buy when it's under %d, sell when it's over %d. Holding DOGE: %s.)", rsi, self.entry, self.exit, in_position)
-        if not in_position and rsi < self.entry:
+        sig = signal_from_rsi(rsi, self.entry, self.exit, in_position)
+        if sig == "buy":
             logger.info("RSI is oversold — deciding to buy.")
-            return "buy"
-        if in_position and rsi > self.exit:
+        elif sig == "sell":
             logger.info("RSI has recovered — deciding to sell.")
-            return "sell"
-        logger.info("Staying put (holding).")
-        return "hold"
+        else:
+            logger.info("Staying put (holding).")
+        return sig
