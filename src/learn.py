@@ -53,14 +53,18 @@ def run_backtest(
     start_index: int = 0,
     initial_usd: float | None = None,
     initial_doge: float | None = None,
+    maker_offset_pct: float | None = None,
 ) -> tuple[float, int, float, float]:
     """Simulate RSI strategy. Returns (return_pct, trade_count, final_usd, final_doge).
     If rsi_series is provided it must match candles; otherwise RSI is computed per bar.
-    start_index/initial_*: when set, simulation starts at that candle with that state (for holdout)."""
+    start_index/initial_*: when set, simulation starts at that candle with that state (for holdout).
+    maker_offset_pct: simulate post-only limit fills (buy below mid, sell above mid); uses config.LIMIT_OFFSET_PCT if None."""
     if len(candles) < PERIOD + 2:
         return 0.0, 0, INITIAL_USD, 0.0
     if fee_pct is None:
         fee_pct = config.LEARN_FEE_PCT
+    if maker_offset_pct is None:
+        maker_offset_pct = getattr(config, "LIMIT_OFFSET_PCT", 0.1)
     if rsi_series is None:
         rsi_series = _compute_rsi_series(candles)
     usd = initial_usd if initial_usd is not None else INITIAL_USD
@@ -76,12 +80,14 @@ def run_backtest(
         in_position = doge > 0
         if not in_position and rsi < entry:
             usd_after_fee = usd * (1.0 - fee_pct / 100.0)
-            fill_buy = close_price * (1.0 + slippage_pct / 100.0)
+            # Post-only limit: buy below mid (better price)
+            fill_buy = close_price * (1.0 - maker_offset_pct / 100.0) * (1.0 + slippage_pct / 100.0)
             doge = usd_after_fee / fill_buy
             usd = 0.0
             trades += 1
         elif in_position and rsi > exit_:
-            fill_sell = close_price * (1.0 - slippage_pct / 100.0)
+            # Post-only limit: sell above mid (better price)
+            fill_sell = close_price * (1.0 + maker_offset_pct / 100.0) * (1.0 - slippage_pct / 100.0)
             usd = doge * fill_sell * (1.0 - fee_pct / 100.0)
             doge = 0.0
             trades += 1

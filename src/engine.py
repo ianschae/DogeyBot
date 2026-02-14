@@ -48,8 +48,8 @@ def run(
             logger.info("Live trading is disabled. Set DRY_RUN=false and ALLOW_LIVE=true to place real orders.")
             return
         try:
-            logger.info("Buying with %s USD.", usd_available)
-            client.market_buy_usd(usd_available)
+            logger.info("Placing post-only limit buy for %s USD.", usd_available)
+            client.limit_buy_usd_post_only(usd_available)
             _last_order_time = now
         except Exception as e:
             logger.exception("Buy failed: %s", e)
@@ -67,8 +67,8 @@ def run(
             logger.info("Live trading is disabled. Set DRY_RUN=false and ALLOW_LIVE=true to place real orders.")
             return
         try:
-            logger.info("Selling %s DOGE.", doge_available)
-            client.market_sell_doge(doge_available)
+            logger.info("Placing post-only limit sell for %s DOGE.", doge_available)
+            client.limit_sell_doge_post_only(doge_available)
             _last_order_time = now
         except Exception as e:
             logger.exception("Sell failed: %s", e)

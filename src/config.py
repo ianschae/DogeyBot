@@ -71,6 +71,8 @@ LOG_LEVEL = getattr(__import__("logging"), _log_level, None) or 20  # INFO
 # Min order sizes (Coinbase DOGE-USD; fallback if product endpoint not used)
 MIN_QUOTE_SIZE_USD = 1.0
 MIN_BASE_SIZE_DOGE = 1.0
+# Post-only limit: place buy below / sell above mid by this fraction so we stay maker (avoid fees).
+LIMIT_OFFSET_PCT = 0.1  # 0.1% = 0.001
 
 
 def _float_env(name: str, default: float) -> float:

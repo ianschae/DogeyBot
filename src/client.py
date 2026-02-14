@@ -220,25 +220,50 @@ def _order_id() -> str:
     return f"doge-bot-{int(time.time() * 1000)}-{os.urandom(4).hex()}"
 
 
-def market_buy_usd(quote_size_usd: str | Decimal) -> None:
-    """Place market buy for DOGE using quote_size in USD (DOGE-USD pair)."""
+def _limit_price_from_mid(price: float, side: str) -> str:
+    """Compute limit price so we sit on the maker side: buy below mid, sell above mid."""
+    offset = (config.LIMIT_OFFSET_PCT / 100.0) or 0.001
+    if side == "buy":
+        limit = price * (1.0 - offset)
+    else:
+        limit = price * (1.0 + offset)
+    return f"{limit:.5f}".rstrip("0").rstrip(".")
+
+
+def limit_buy_usd_post_only(quote_size_usd: str | Decimal) -> None:
+    """Place post-only limit buy for DOGE (maker only, no fees). Uses current price - offset for limit."""
+    price = get_product_market_data().get("price")
+    if not price or price <= 0:
+        raise ValueError("No valid price for limit order")
+    limit_price = _limit_price_from_mid(price, "buy")
+    # base_size = quote_usd / limit_price, rounded down to whole DOGE
+    base = float(Decimal(str(quote_size_usd)) / Decimal(limit_price))
+    base_size = str(max(1, int(base)))
     client = _client()
     client_order_id = _order_id()
-    client.market_order_buy(
+    client.limit_order_gtc_buy(
         client_order_id=client_order_id,
         product_id=config.PRODUCT_ID,
-        quote_size=str(quote_size_usd),
+        base_size=base_size,
+        limit_price=limit_price,
+        post_only=True,
     )
-    logger.info("Placed buy order for %s USD.", quote_size_usd)
+    logger.info("Placed post-only limit buy: %s DOGE @ %s (was %s USD).", base_size, limit_price, quote_size_usd)
 
 
-def market_sell_doge(base_size_doge: str | Decimal) -> None:
-    """Place market sell for DOGE (base_size in DOGE)."""
+def limit_sell_doge_post_only(base_size_doge: str | Decimal) -> None:
+    """Place post-only limit sell for DOGE (maker only, no fees). Uses current price + offset for limit."""
+    price = get_product_market_data().get("price")
+    if not price or price <= 0:
+        raise ValueError("No valid price for limit order")
+    limit_price = _limit_price_from_mid(price, "sell")
     client = _client()
     client_order_id = _order_id()
-    client.market_order_sell(
+    client.limit_order_gtc_sell(
         client_order_id=client_order_id,
         product_id=config.PRODUCT_ID,
         base_size=str(base_size_doge),
+        limit_price=limit_price,
+        post_only=True,
     )
-    logger.info("Placed sell order for %s DOGE.", base_size_doge)
+    logger.info("Placed post-only limit sell: %s DOGE @ %s.", base_size_doge, limit_price)
