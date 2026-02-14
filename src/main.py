@@ -74,38 +74,41 @@ def _write_status(
         except (TypeError, ValueError):
             continue
     rsi = _rsi_wilder(closes, strategy_period) if len(closes) >= strategy_period + 1 else None
+    payload = {
+        "doge": round(doge, 8),
+        "usd": round(usd, 2),
+        "in_position": in_position,
+        "signal": signal,
+        "portfolio_value": round(portfolio_value, 2),
+        "gain_usd": round(gain_usd, 2),
+        "gain_pct": round(gain_pct, 2),
+        "peak_usd": round(peak, 2),
+        "drawdown_pct": round(drawdown_pct, 2),
+        "days_tracked": round(days_tracked, 1),
+        "avg_daily_gain_pct": round(avg_daily_gain_pct, 2),
+        "avg_daily_gain_usd": round(avg_daily_gain_usd, 2),
+        "price": round(price, 6),
+        "rsi": round(rsi, 1) if rsi is not None else None,
+        "rsi_entry": rsi_entry,
+        "rsi_exit": rsi_exit,
+        "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+        "next_check_seconds": config.POLL_INTERVAL_SECONDS,
+        "last_learn_timestamp_utc": datetime.fromtimestamp(last_learn_time, tz=timezone.utc).isoformat(),
+        "learn_interval_seconds": config.LEARN_INTERVAL_SECONDS,
+        "dry_run": config.DRY_RUN,
+        "allow_live": config.ALLOW_LIVE,
+    }
+    if change_24h_pct is not None:
+        payload["change_24h_pct"] = round(change_24h_pct, 2)
+    if volume_24h is not None:
+        payload["volume_24h"] = round(volume_24h, 0)
     try:
         config.STATUS_FILE.parent.mkdir(parents=True, exist_ok=True)
-        with open(config.STATUS_FILE, "w") as f:
-            payload = {
-                "doge": round(doge, 8),
-                "usd": round(usd, 2),
-                "in_position": in_position,
-                "signal": signal,
-                "portfolio_value": round(portfolio_value, 2),
-                "gain_usd": round(gain_usd, 2),
-                "gain_pct": round(gain_pct, 2),
-                "peak_usd": round(peak, 2),
-                "drawdown_pct": round(drawdown_pct, 2),
-                "days_tracked": round(days_tracked, 1),
-                "avg_daily_gain_pct": round(avg_daily_gain_pct, 2),
-                "avg_daily_gain_usd": round(avg_daily_gain_usd, 2),
-                "price": round(price, 6),
-                "rsi": round(rsi, 1) if rsi is not None else None,
-                "rsi_entry": rsi_entry,
-                "rsi_exit": rsi_exit,
-                "timestamp_utc": datetime.now(timezone.utc).isoformat(),
-                "next_check_seconds": config.POLL_INTERVAL_SECONDS,
-                "last_learn_timestamp_utc": datetime.fromtimestamp(last_learn_time, tz=timezone.utc).isoformat(),
-                "learn_interval_seconds": config.LEARN_INTERVAL_SECONDS,
-                "dry_run": config.DRY_RUN,
-                "allow_live": config.ALLOW_LIVE,
-            }
-            if change_24h_pct is not None:
-                payload["change_24h_pct"] = round(change_24h_pct, 2)
-            if volume_24h is not None:
-                payload["volume_24h"] = round(volume_24h, 0)
+        tmp = config.STATUS_FILE.with_suffix(config.STATUS_FILE.suffix + ".tmp")
+        with open(tmp, "w") as f:
             json.dump(payload, f, indent=2)
+            f.flush()
+        tmp.replace(config.STATUS_FILE)
         config.secure_file(config.STATUS_FILE)
     except OSError as e:
         logger.debug("Could not write status file: %s", e)
@@ -132,8 +135,11 @@ def _refresh_status_market_data() -> None:
         data["volume_24h"] = round(market["volume_24h"], 0)
     data["timestamp_utc"] = datetime.now(timezone.utc).isoformat()
     try:
-        with open(config.STATUS_FILE, "w") as f:
+        tmp = config.STATUS_FILE.with_suffix(config.STATUS_FILE.suffix + ".tmp")
+        with open(tmp, "w") as f:
             json.dump(data, f, indent=2)
+            f.flush()
+        tmp.replace(config.STATUS_FILE)
         config.secure_file(config.STATUS_FILE)
     except OSError as e:
         logger.debug("Could not refresh status: %s", e)

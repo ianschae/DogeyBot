@@ -446,6 +446,28 @@ def run_gui(shutdown_event) -> None:
         x = float(n)
         return f"{x:,.0f}" if x >= 1000 else f"{x:,.2f}" if x >= 1 else f"{x:.4f}"
 
+    # Cache last-displayed values so we only update widgets when changed (reduces flicker/redraws)
+    _last = {}
+
+    def _set_label(lbl, text, fg=None):
+        key = id(lbl)
+        prev = _last.get(key, (None, None))
+        if (text, fg) == prev:
+            return
+        _last[key] = (text, fg)
+        if fg is not None:
+            lbl.config(text=text, fg=fg)
+        else:
+            lbl.config(text=text)
+
+    def _set_bar(bar, value):
+        key = id(bar)
+        v = min(100, max(0, value))
+        if _last.get(key) == v:
+            return
+        _last[key] = v
+        bar["value"] = v
+
     def update_gui():
         if shutdown_event.is_set():
             root.quit()
@@ -460,22 +482,22 @@ def run_gui(shutdown_event) -> None:
         rsi_val = s.get("rsi")
         next_sec = s.get("next_check_seconds") or config.POLL_INTERVAL_SECONDS
 
-        score_label.config(text=f"${fmt(pv)}")
-        stat_labels["doge"].config(text=fmt_doge(s.get("doge")))
-        stat_labels["usd"].config(text=f"${fmt(s.get('usd'))}")
+        _set_label(score_label, f"${fmt(pv)}")
+        _set_label(stat_labels["doge"], fmt_doge(s.get("doge")))
+        _set_label(stat_labels["usd"], f"${fmt(s.get('usd'))}")
         gain_text = f"${fmt(gu)} ({fmt(gp)}%)"
-        stat_labels["gain"].config(text=gain_text, fg=fg_success if gp > 0 else fg_danger if gp < 0 else fg_primary)
-        stat_labels["move"].config(text=move_text, fg=fg_success if sig == "buy" else fg_danger if sig == "sell" else fg_accent)
+        _set_label(stat_labels["gain"], gain_text, fg_success if gp > 0 else fg_danger if gp < 0 else fg_primary)
+        _set_label(stat_labels["move"], move_text, fg_success if sig == "buy" else fg_danger if sig == "sell" else fg_accent)
         price_val = s.get("price")
-        stat_labels["price"].config(text=f"${fmt(price_val)}" if price_val not in (None, 0) else "—")
+        _set_label(stat_labels["price"], f"${fmt(price_val)}" if price_val not in (None, 0) else "—")
         peak_val = s.get("peak_usd") or 0
         days_val = s.get("days_tracked") or 0
         avg_val = s.get("avg_daily_gain_pct") or 0
         usd_daily_val = s.get("avg_daily_gain_usd") or 0
-        stat_labels["peak"].config(text=f"${fmt(peak_val)}")
-        stat_labels["days"].config(text=fmt(days_val))
-        stat_labels["avg_daily"].config(text=f"{fmt(avg_val)}%", fg=fg_success if avg_val > 0 else fg_danger if avg_val < 0 else fg_primary)
-        stat_labels["usd_daily"].config(text=f"${fmt(usd_daily_val)}", fg=fg_success if usd_daily_val > 0 else fg_danger if usd_daily_val < 0 else fg_primary)
+        _set_label(stat_labels["peak"], f"${fmt(peak_val)}")
+        _set_label(stat_labels["days"], fmt(days_val))
+        _set_label(stat_labels["avg_daily"], f"{fmt(avg_val)}%", fg_success if avg_val > 0 else fg_danger if avg_val < 0 else fg_primary)
+        _set_label(stat_labels["usd_daily"], f"${fmt(usd_daily_val)}", fg_success if usd_daily_val > 0 else fg_danger if usd_daily_val < 0 else fg_primary)
         ch = s.get("change_24h_pct")
         vol = s.get("volume_24h")
         if ch is not None:
@@ -487,46 +509,44 @@ def run_gui(shutdown_event) -> None:
                     change_text += f"\n{vol / 1_000:.1f}K vol"
                 else:
                     change_text += f"\n{fmt(vol)} vol"
-            stat_labels["change_24h"].config(text=change_text, fg=fg_success if ch > 0 else fg_danger if ch < 0 else fg_primary)
+            _set_label(stat_labels["change_24h"], change_text, fg_success if ch > 0 else fg_danger if ch < 0 else fg_primary)
         else:
-            stat_labels["change_24h"].config(text="—", fg=fg_primary)
+            _set_label(stat_labels["change_24h"], "—", fg_primary)
 
         if rsi_val is not None:
-            rsi_bar["value"] = min(100, max(0, float(rsi_val)))
-            rsi_value_label.config(text=f"RSI = {fmt(rsi_val)}")
+            rsi_v = min(100, max(0, float(rsi_val)))
+            _set_bar(rsi_bar, rsi_v)
+            _set_label(rsi_value_label, f"RSI = {fmt(rsi_val)}")
         else:
-            rsi_bar["value"] = 0
-            rsi_value_label.config(text="RSI = —")
+            _set_bar(rsi_bar, 0)
+            _set_label(rsi_value_label, "RSI = —")
         entry_r = s.get("rsi_entry")
         exit_r = s.get("rsi_exit")
-        if entry_r is not None and exit_r is not None:
-            rsi_zone_label.config(text=f"buy when RSI < {entry_r}, sell when RSI > {exit_r}")
-        else:
-            rsi_zone_label.config(text="—")
+        rsi_zone_text = f"buy when RSI < {entry_r}, sell when RSI > {exit_r}" if (entry_r is not None and exit_r is not None) else "—"
+        _set_label(rsi_zone_label, rsi_zone_text)
 
         if cd is not None and next_sec and next_sec > 0:
             pct = 100.0 * (next_sec - cd) / next_sec
-            next_bar["value"] = min(100, max(0, pct))
-            next_value_label.config(text=f"Next check in {cd}s")
+            _set_bar(next_bar, pct)
+            _set_label(next_value_label, f"Next check in {cd}s")
         else:
-            next_bar["value"] = 0
-            next_value_label.config(text="—")
+            _set_bar(next_bar, 0)
+            _set_label(next_value_label, "—")
 
         learn_cd = _countdown_learn_sec(s)
         learn_interval = s.get("learn_interval_seconds") or config.LEARN_INTERVAL_SECONDS
         if learn_cd is not None and learn_interval and learn_interval > 0:
             pct_learn = 100.0 * (learn_interval - learn_cd) / learn_interval
-            learn_bar["value"] = min(100, max(0, pct_learn))
+            _set_bar(learn_bar, pct_learn)
             h, r = divmod(learn_cd, 3600)
             m, sec = divmod(r, 60)
-            learn_value_label.config(text=f"Next backtest in {int(h)}h {int(m)}m {int(sec)}s")
+            _set_label(learn_value_label, f"Next backtest in {int(h)}h {int(m)}m {int(sec)}s")
         else:
-            learn_bar["value"] = 0
-            learn_value_label.config(text="—")
+            _set_bar(learn_bar, 0)
+            _set_label(learn_value_label, "—")
 
-        mode_label.config(
-            text="such dry run. no order. wow." if s.get("dry_run") else "very live. much trade." if s.get("allow_live") else "live off. such safe."
-        )
+        mode_text = "such dry run. no order. wow." if s.get("dry_run") else "very live. much trade." if s.get("allow_live") else "live off. such safe."
+        _set_label(mode_label, mode_text)
         ts = s.get("timestamp_utc")
         if ts:
             try:
@@ -534,15 +554,16 @@ def run_gui(shutdown_event) -> None:
                 then = datetime.fromisoformat(ts.replace("Z", "+00:00")).timestamp()
                 ago = int(time.time() - then)
                 if ago < 60:
-                    updated_ago_label.config(text=f"Updated {ago}s ago")
+                    updated_text = f"Updated {ago}s ago"
                 elif ago < 3600:
-                    updated_ago_label.config(text=f"Updated {ago // 60}m ago")
+                    updated_text = f"Updated {ago // 60}m ago"
                 else:
-                    updated_ago_label.config(text=f"Updated {ago // 3600}h ago")
+                    updated_text = f"Updated {ago // 3600}h ago"
             except Exception:
-                updated_ago_label.config(text="")
+                updated_text = ""
         else:
-            updated_ago_label.config(text="")
+            updated_text = ""
+        _set_label(updated_ago_label, updated_text)
         now_ui = time.time()
         if now_ui < party_mode_until[0]:
             if now_ui >= party_phrase_until[0]:
