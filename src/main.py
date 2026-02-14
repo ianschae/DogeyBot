@@ -24,6 +24,8 @@ logger = logging.getLogger(__name__)
 
 _shutdown = False
 _ui_shutdown_ref: threading.Event | None = None  # set when GUI is used, so Ctrl+C can close it
+# Last backtest result for UI: (overall_return_pct, total_trades)
+_last_backtest: tuple[float | None, int | None] = (None, None)
 
 
 def _handle_sig(signum, frame):
@@ -63,6 +65,9 @@ def _write_status(
     last_learn_time: float,
     change_24h_pct: float | None = None,
     volume_24h: float | None = None,
+    backtest_return_pct: float | None = None,
+    backtest_trades: int | None = None,
+    backtest_days: int | None = None,
 ) -> None:
     """Write status.json for the UI (only when UI_ENABLED)."""
     if not config.UI_ENABLED:
@@ -102,6 +107,12 @@ def _write_status(
         payload["change_24h_pct"] = round(change_24h_pct, 2)
     if volume_24h is not None:
         payload["volume_24h"] = round(volume_24h, 0)
+    if backtest_return_pct is not None:
+        payload["backtest_return_pct"] = round(backtest_return_pct, 2)
+    if backtest_trades is not None:
+        payload["backtest_trades"] = backtest_trades
+    if backtest_days is not None:
+        payload["backtest_days"] = backtest_days
     try:
         config.STATUS_FILE.parent.mkdir(parents=True, exist_ok=True)
         tmp = config.STATUS_FILE.with_suffix(config.STATUS_FILE.suffix + ".tmp")
@@ -164,11 +175,16 @@ def _bot_loop(strategy: RSIMeanReversion) -> None:
                     last_learn_time = time.time()
                     if learned is not None:
                         entry, exit_, return_pct, trades = learned
-                        period = learn.PERIOD
-                        strategy.period = period
-                        strategy.entry = entry
-                        strategy.exit = exit_
-                        logger.info("Updated settings: buy when RSI < %s, sell when RSI > %s. Backtest: %s%% (%s trades).", entry, exit_, f"{return_pct:.2f}", trades)
+                        global _last_backtest
+                        _last_backtest = (return_pct, trades)
+                        if entry is not None and exit_ is not None:
+                            period = learn.PERIOD
+                            strategy.period = period
+                            strategy.entry = entry
+                            strategy.exit = exit_
+                            logger.info("Updated settings: buy when RSI < %s, sell when RSI > %s. Backtest: %s%% (%s trades).", entry, exit_, f"{return_pct:.2f}", trades)
+                        else:
+                            logger.info("Re-ran backtest: %s%%, %s trades (no profitable combo, keeping current RSI).", f"{return_pct:.2f}", trades)
                 logger.info("---")
                 logger.info("Checking the market and your balance...")
                 candles = client.get_closed_candles(config.CANDLES_COUNT)
@@ -215,6 +231,9 @@ def _bot_loop(strategy: RSIMeanReversion) -> None:
                     strategy.entry, strategy.exit, last_learn_time,
                     change_24h_pct=change_24h_pct,
                     volume_24h=volume_24h,
+                    backtest_return_pct=_last_backtest[0],
+                    backtest_trades=_last_backtest[1],
+                    backtest_days=config.LEARN_DAYS,
                 )
                 last_full_check = time.time()
                 logger.info("Next check in %s seconds.", config.POLL_INTERVAL_SECONDS)
@@ -237,12 +256,22 @@ def main():
         logger.info("No orders will be placed (dry run). Set DRY_RUN=false and ALLOW_LIVE=true in .env to trade live.")
     elif not config.ALLOW_LIVE:
         logger.info("No orders will be placed (ALLOW_LIVE not set). Set ALLOW_LIVE=true in .env to trade live.")
+    global _last_backtest
     learned = learn.run_learn(days=config.LEARN_DAYS, logger=logger)
     if learned is not None:
         entry, exit_, return_pct, trades = learned
-        period = learn.PERIOD
-        strategy = RSIMeanReversion(period=period, entry=entry, exit=exit_)
-        logger.info("Using the best settings from the backtest: buy when RSI < %s, sell when RSI > %s. That would have been %s%% over the last 60 days (%s trades).", entry, exit_, f"{return_pct:.2f}", trades)
+        _last_backtest = (return_pct, trades)
+        if entry is not None and exit_ is not None:
+            period = learn.PERIOD
+            strategy = RSIMeanReversion(period=period, entry=entry, exit=exit_)
+            logger.info("Using the best settings from the backtest: buy when RSI < %s, sell when RSI > %s. That would have been %s%% over the last 60 days (%s trades).", entry, exit_, f"{return_pct:.2f}", trades)
+        else:
+            strategy = RSIMeanReversion(
+                period=config.RSI_PERIOD,
+                entry=config.RSI_ENTRY,
+                exit=config.RSI_EXIT,
+            )
+            logger.info("No profitable combo found; backtest with defaults: %s%%, %s trades. Using default RSI.", f"{return_pct:.2f}", trades)
     else:
         strategy = RSIMeanReversion(
             period=config.RSI_PERIOD,

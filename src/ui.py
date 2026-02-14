@@ -35,6 +35,9 @@ def _read_status() -> dict:
         "learn_interval_seconds": config.LEARN_INTERVAL_SECONDS,
         "dry_run": config.DRY_RUN,
         "allow_live": config.ALLOW_LIVE,
+        "backtest_return_pct": None,
+        "backtest_trades": None,
+        "backtest_days": None,
     }
     if not config.STATUS_FILE.exists():
         return default
@@ -350,7 +353,9 @@ def run_gui(shutdown_event) -> None:
     learn_bar = ttk.Progressbar(bars_f, length=400, mode="determinate", maximum=100, style="Warm.Horizontal.TProgressbar")
     learn_bar.pack(fill=tk.X, pady=(0, 2))
     learn_value_label = tk.Label(bars_f, text="—", font=font_label, bg=bg, fg=fg_primary)
-    learn_value_label.pack(anchor=tk.W, pady=(0, pad_lg))
+    learn_value_label.pack(anchor=tk.W, pady=(0, 2))
+    backtest_result_label = tk.Label(bars_f, text="", font=font_label, bg=bg, fg=fg_muted)
+    backtest_result_label.pack(anchor=tk.W, pady=(0, pad_lg))
 
     # Coin rain: fall from very top, full width, with depth (some in front, some behind)
     import random
@@ -544,6 +549,17 @@ def run_gui(shutdown_event) -> None:
         else:
             _set_bar(learn_bar, 0)
             _set_label(learn_value_label, "—")
+        bt_ret = s.get("backtest_return_pct")
+        bt_trades = s.get("backtest_trades")
+        bt_days = s.get("backtest_days")
+        if bt_ret is not None and bt_trades is not None:
+            freq = ""
+            if bt_days and bt_days > 0:
+                per_month = (bt_trades / bt_days) * 30
+                freq = f" (~{per_month:.1f}/month)"
+            _set_label(backtest_result_label, f"Last backtest: {bt_ret:+.2f}%, {bt_trades} trades{freq}")
+        else:
+            _set_label(backtest_result_label, "")
 
         mode_text = "such dry run. no order. wow." if s.get("dry_run") else "very live. much trade." if s.get("allow_live") else "live off. such safe."
         _set_label(mode_label, mode_text)
