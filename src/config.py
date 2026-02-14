@@ -68,5 +68,5 @@ def _float_env(name: str, default: float) -> float:
         return default
 
 
-# Optional: fee % per trade side for backtest realism (default 0)
-LEARN_FEE_PCT = _float_env("LEARN_FEE_PCT", 0.0)
+# Optional: fee % per trade side for backtest (Coinbase maker ~0.6% per side)
+LEARN_FEE_PCT = _float_env("LEARN_FEE_PCT", 0.6)
