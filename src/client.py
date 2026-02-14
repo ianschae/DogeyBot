@@ -1,5 +1,6 @@
 """Thin wrapper around Coinbase REST client for DOGE-USD."""
 import logging
+import os
 import time
 from decimal import Decimal
 
@@ -9,8 +10,20 @@ from . import config
 
 logger = logging.getLogger(__name__)
 
-# SIX_HOUR in seconds for closed-candle cutoff
-GRANULARITY_SECONDS = {"SIX_HOUR": 6 * 3600, "ONE_DAY": 24 * 3600}
+# Granularity name -> seconds per candle (for closed-candle cutoff and history range)
+GRANULARITY_SECONDS = {
+    "ONE_MINUTE": 60,
+    "FIVE_MINUTE": 5 * 60,
+    "FIFTEEN_MINUTE": 15 * 60,
+    "THIRTY_MINUTE": 30 * 60,
+    "ONE_HOUR": 3600,
+    "TWO_HOUR": 2 * 3600,
+    "FOUR_HOUR": 4 * 3600,
+    "SIX_HOUR": 6 * 3600,
+    "ONE_DAY": 24 * 3600,
+}
+# Max candles per API request (Coinbase limit)
+CANDLES_PER_REQUEST = 350
 
 
 def _retry(fn, max_attempts: int = 3, delay_sec: float = 2):
@@ -70,15 +83,56 @@ def get_doge_and_usd_balances() -> tuple[Decimal, Decimal]:
     return doge, usd
 
 
-def get_closed_candles(count: int = None) -> list[dict]:
+def _parse_float(val, strip_pct: bool = True) -> float | None:
+    """Parse API string to float; if strip_pct, remove trailing '%'."""
+    if val is None:
+        return None
+    s = str(val).strip().rstrip("%")
+    try:
+        return float(s)
+    except (TypeError, ValueError):
+        return None
+
+
+def get_product_market_data() -> dict:
+    """Fetch DOGE-USD product once; return dict with price, change_24h_pct, volume_24h (None on missing/fail)."""
+    out = {"price": None, "change_24h_pct": None, "volume_24h": None}
+    client = _client()
+
+    def _fetch():
+        return client.get_product(product_id=config.PRODUCT_ID)
+
+    try:
+        resp = _retry(_fetch)
+    except Exception as e:
+        logger.debug("Couldn't fetch product: %s", e)
+        return out
+    is_dict = isinstance(resp, dict)
+    price = resp.get("price") if is_dict else getattr(resp, "price", None)
+    change = resp.get("price_percentage_change_24h") if is_dict else getattr(resp, "price_percentage_change_24h", None)
+    vol = resp.get("volume_24h") if is_dict else getattr(resp, "volume_24h", None)
+    p = _parse_float(price, strip_pct=False)
+    if p is not None and p > 0:
+        out["price"] = p
+    c = _parse_float(change)
+    if c is not None:
+        out["change_24h_pct"] = c
+    v = _parse_float(vol, strip_pct=False)
+    if v is not None and v >= 0:
+        out["volume_24h"] = v
+    return out
+
+
+def get_closed_candles(count: int = None, granularity: str | None = None) -> list[dict]:
     """Fetch DOGE-USD candles and return only closed ones, sorted ascending by time.
     Returns list of dicts with keys: start, open, high, low, close, volume.
+    granularity: override config (e.g. from learned_params); must be in GRANULARITY_SECONDS.
     """
     count = count or config.CANDLES_COUNT
+    gran = granularity or config.CANDLE_GRANULARITY
     client = _client()
     end_ts = int(time.time())
-    granularity_sec = GRANULARITY_SECONDS.get(config.CANDLE_GRANULARITY, 6 * 3600)
-    # Request enough range to get at least `count` candles; end before now so last candle is closed
+    granularity_sec = GRANULARITY_SECONDS.get(gran, 6 * 3600)
     start_ts = end_ts - (count + 2) * granularity_sec
     start_str = str(start_ts)
     end_str = str(end_ts)
@@ -88,7 +142,7 @@ def get_closed_candles(count: int = None) -> list[dict]:
             product_id=config.PRODUCT_ID,
             start=start_str,
             end=end_str,
-            granularity=config.CANDLE_GRANULARITY,
+            granularity=gran,
         )
 
     try:
@@ -97,7 +151,6 @@ def get_closed_candles(count: int = None) -> list[dict]:
         logger.exception("Couldn't fetch candles: %s", e)
         return []
     out = _parse_candle_response(resp)
-    # Only closed: candle's end = start + granularity_sec; must be < now
     cutoff = end_ts - granularity_sec
     out = [c for c in out if (c["start"] + granularity_sec) <= cutoff]
     out.sort(key=lambda c: c["start"])
@@ -154,25 +207,63 @@ def get_candles_range(start_ts: int, end_ts: int, granularity: str = "SIX_HOUR")
     return out
 
 
-def market_buy_usd(quote_size_usd: str | Decimal) -> None:
-    """Place market buy for DOGE using quote_size in USD (DOGE-USD pair)."""
+def get_candles_max_history(granularity: str, max_candles: int = CANDLES_PER_REQUEST) -> list[dict]:
+    """Fetch up to max_candles of the most recent DOGE-USD candles for the given granularity. Sorted ascending."""
+    end_ts = int(time.time())
+    sec = GRANULARITY_SECONDS.get(granularity, 6 * 3600)
+    start_ts = end_ts - max_candles * sec
+    return get_candles_range(start_ts, end_ts, granularity)
+
+
+def _order_id() -> str:
+    """Unique order id to avoid exchange rejections from collision."""
+    return f"doge-bot-{int(time.time() * 1000)}-{os.urandom(4).hex()}"
+
+
+def _limit_price_from_mid(price: float, side: str) -> str:
+    """Compute limit price so we sit on the maker side: buy below mid, sell above mid."""
+    offset = (config.LIMIT_OFFSET_PCT / 100.0) or 0.001
+    if side == "buy":
+        limit = price * (1.0 - offset)
+    else:
+        limit = price * (1.0 + offset)
+    return f"{limit:.5f}".rstrip("0").rstrip(".")
+
+
+def limit_buy_usd_post_only(quote_size_usd: str | Decimal) -> None:
+    """Place post-only limit buy for DOGE (maker only, no fees). Uses current price - offset for limit."""
+    price = get_product_market_data().get("price")
+    if not price or price <= 0:
+        raise ValueError("No valid price for limit order")
+    limit_price = _limit_price_from_mid(price, "buy")
+    # base_size = quote_usd / limit_price, rounded down to whole DOGE
+    base = float(Decimal(str(quote_size_usd)) / Decimal(limit_price))
+    base_size = str(max(1, int(base)))
     client = _client()
-    client_order_id = f"doge-bot-{int(time.time() * 1000)}"
-    client.market_order_buy(
+    client_order_id = _order_id()
+    client.limit_order_gtc_buy(
         client_order_id=client_order_id,
         product_id=config.PRODUCT_ID,
-        quote_size=str(quote_size_usd),
+        base_size=base_size,
+        limit_price=limit_price,
+        post_only=True,
     )
-    logger.info("Placed buy order for %s USD.", quote_size_usd)
+    logger.info("Placed post-only limit buy: %s DOGE @ %s (was %s USD).", base_size, limit_price, quote_size_usd)
 
 
-def market_sell_doge(base_size_doge: str | Decimal) -> None:
-    """Place market sell for DOGE (base_size in DOGE)."""
+def limit_sell_doge_post_only(base_size_doge: str | Decimal) -> None:
+    """Place post-only limit sell for DOGE (maker only, no fees). Uses current price + offset for limit."""
+    price = get_product_market_data().get("price")
+    if not price or price <= 0:
+        raise ValueError("No valid price for limit order")
+    limit_price = _limit_price_from_mid(price, "sell")
     client = _client()
-    client_order_id = f"doge-bot-{int(time.time() * 1000)}"
-    client.market_order_sell(
+    client_order_id = _order_id()
+    client.limit_order_gtc_sell(
         client_order_id=client_order_id,
         product_id=config.PRODUCT_ID,
         base_size=str(base_size_doge),
+        limit_price=limit_price,
+        post_only=True,
     )
-    logger.info("Placed sell order for %s DOGE.", base_size_doge)
+    logger.info("Placed post-only limit sell: %s DOGE @ %s.", base_size_doge, limit_price)
