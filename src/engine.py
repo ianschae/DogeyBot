@@ -23,8 +23,9 @@ def run(
     signal: str,
     doge_balance: Decimal,
     usd_balance: Decimal,
+    usdc_balance: Decimal,
 ) -> None:
-    """Execute signal: buy (use all USD), sell (use all DOGE), or hold.
+    """Execute signal: buy (use all USD or USDC), sell (use all DOGE), or hold.
     Respects min order size (skip and log if below), cooldown, and dry_run.
     """
     global _last_order_time
@@ -38,18 +39,31 @@ def run(
         return
     if signal == "buy":
         usd_available = _round_down_usd(usd_balance)
-        if usd_available < Decimal(str(config.MIN_QUOTE_SIZE_USD)):
-            logger.info("Skipping buy — only %.2f USD (need at least %.2f).", float(usd_available), config.MIN_QUOTE_SIZE_USD)
-            return
+        usdc_available = _round_down_usd(usdc_balance)
+        min_quote = Decimal(str(config.MIN_QUOTE_SIZE_USD))
+        use_usdc = config.QUOTE_CURRENCY == "USDC"
+        if use_usdc:
+            quote_available = usdc_available
+            if quote_available < min_quote:
+                logger.info("Skipping buy — only %.2f USDC (need at least %.2f). QUOTE_CURRENCY=USDC.", float(quote_available), config.MIN_QUOTE_SIZE_USD)
+                return
+        else:
+            quote_available = usd_available
+            if quote_available < min_quote:
+                logger.info("Skipping buy — only %.2f USD (need at least %.2f). QUOTE_CURRENCY=USD.", float(quote_available), config.MIN_QUOTE_SIZE_USD)
+                return
         if config.DRY_RUN:
-            logger.info("Would buy with %s USD (dry run, no order placed).", usd_available)
+            logger.info("Would buy with %s %s (dry run, no order placed).", quote_available, config.QUOTE_CURRENCY)
             return
         if not config.ALLOW_LIVE:
             logger.info("Live trading is disabled. Set DRY_RUN=false and ALLOW_LIVE=true to place real orders.")
             return
         try:
-            logger.info("Buying with %s USD.", usd_available)
-            client.market_buy_usd(usd_available)
+            logger.info("Buying with %s %s.", quote_available, config.QUOTE_CURRENCY)
+            if use_usdc:
+                client.market_buy_usdc(quote_available)
+            else:
+                client.market_buy_usd(quote_available)
             _last_order_time = now
         except Exception as e:
             logger.exception("Buy failed: %s", e)

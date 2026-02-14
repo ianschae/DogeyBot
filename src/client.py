@@ -35,8 +35,8 @@ def _client() -> RESTClient:
     )
 
 
-def get_doge_and_usd_balances() -> tuple[Decimal, Decimal]:
-    """Return (doge_available, usd_available) as Decimals. DOGE is base, USD is quote."""
+def get_doge_and_usd_balances() -> tuple[Decimal, Decimal, Decimal]:
+    """Return (doge_available, usd_available, usdc_available) as Decimals. DOGE is base; USD/USDC are quote."""
     client = _client()
 
     def _fetch():
@@ -46,9 +46,10 @@ def get_doge_and_usd_balances() -> tuple[Decimal, Decimal]:
         resp = _retry(_fetch)
     except Exception as e:
         logger.exception("Couldn't fetch accounts: %s", e)
-        return Decimal("0"), Decimal("0")
+        return Decimal("0"), Decimal("0"), Decimal("0")
     doge = Decimal("0")
     usd = Decimal("0")
+    usdc = Decimal("0")
     for acc in getattr(resp, "accounts", []) or []:
         currency = getattr(acc, "currency", None) if not isinstance(acc, dict) else acc.get("currency")
         if not currency:
@@ -67,7 +68,9 @@ def get_doge_and_usd_balances() -> tuple[Decimal, Decimal]:
             doge = q
         elif currency == "USD":
             usd = q
-    return doge, usd
+        elif currency == "USDC":
+            usdc = q
+    return doge, usd, usdc
 
 
 def get_closed_candles(count: int = None) -> list[dict]:
@@ -154,8 +157,11 @@ def get_candles_range(start_ts: int, end_ts: int, granularity: str = "SIX_HOUR")
     return out
 
 
+PRODUCT_ID_USDC = "DOGE-USDC"
+
+
 def market_buy_usd(quote_size_usd: str | Decimal) -> None:
-    """Place market buy for DOGE using quote_size in USD."""
+    """Place market buy for DOGE using quote_size in USD (DOGE-USD pair)."""
     client = _client()
     client_order_id = f"doge-bot-{int(time.time() * 1000)}"
     client.market_order_buy(
@@ -164,6 +170,18 @@ def market_buy_usd(quote_size_usd: str | Decimal) -> None:
         quote_size=str(quote_size_usd),
     )
     logger.info("Placed buy order for %s USD.", quote_size_usd)
+
+
+def market_buy_usdc(quote_size_usdc: str | Decimal) -> None:
+    """Place market buy for DOGE using quote_size in USDC (DOGE-USDC pair)."""
+    client = _client()
+    client_order_id = f"doge-bot-{int(time.time() * 1000)}"
+    client.market_order_buy(
+        client_order_id=client_order_id,
+        product_id=PRODUCT_ID_USDC,
+        quote_size=str(quote_size_usdc),
+    )
+    logger.info("Placed buy order for %s USDC.", quote_size_usdc)
 
 
 def market_sell_doge(base_size_doge: str | Decimal) -> None:
