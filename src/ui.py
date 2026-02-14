@@ -20,8 +20,12 @@ def _read_status() -> dict:
         "gain_pct": 0,
         "price": 0,
         "rsi": None,
+        "rsi_entry": 30,
+        "rsi_exit": 50,
         "timestamp_utc": None,
         "next_check_seconds": config.POLL_INTERVAL_SECONDS,
+        "last_learn_timestamp_utc": None,
+        "learn_interval_seconds": config.LEARN_INTERVAL_SECONDS,
         "dry_run": config.DRY_RUN,
         "allow_live": config.ALLOW_LIVE,
     }
@@ -29,7 +33,8 @@ def _read_status() -> dict:
         return default
     try:
         with open(config.STATUS_FILE) as f:
-            return json.load(f)
+            data = json.load(f)
+        return data if isinstance(data, dict) else default
     except (json.JSONDecodeError, OSError):
         return default
 
@@ -106,6 +111,21 @@ def _countdown_sec(s: dict) -> int | None:
         then = datetime.fromisoformat(ts.replace("Z", "+00:00")).timestamp()
         elapsed = time.time() - then
         return max(0, int(next_sec - elapsed))
+    except Exception:
+        return None
+
+
+def _countdown_learn_sec(s: dict) -> int | None:
+    """Seconds until next backtest/learn run."""
+    ts = s.get("last_learn_timestamp_utc")
+    interval = s.get("learn_interval_seconds") or config.LEARN_INTERVAL_SECONDS
+    if not ts or not interval:
+        return None
+    try:
+        from datetime import datetime
+        then = datetime.fromisoformat(ts.replace("Z", "+00:00")).timestamp()
+        elapsed = time.time() - then
+        return max(0, int(interval - elapsed))
     except Exception:
         return None
 
@@ -256,7 +276,13 @@ def run_gui(shutdown_event) -> None:
     next_bar = ttk.Progressbar(root, length=400, mode="determinate", maximum=100)
     next_bar.pack(fill=tk.X, pady=(0, 2))
     next_value_label = tk.Label(root, text="—", font=font_label, bg="#fffbf0", fg="#3d2914")
-    next_value_label.pack(anchor=tk.W, pady=(0, 12))
+    next_value_label.pack(anchor=tk.W, pady=(0, 8))
+
+    tk.Label(root, text="many seconds until next backtest", font=font_label, bg="#fffbf0", fg="#8b7355").pack(anchor=tk.W, pady=(4, 2))
+    learn_bar = ttk.Progressbar(root, length=400, mode="determinate", maximum=100)
+    learn_bar.pack(fill=tk.X, pady=(0, 2))
+    learn_value_label = tk.Label(root, text="—", font=font_label, bg="#fffbf0", fg="#3d2914")
+    learn_value_label.pack(anchor=tk.W, pady=(0, 12))
 
     # Coin rain canvas (coins fall from top)
     coin_canvas = tk.Canvas(root, width=480, height=160, bg="#fffbf0", highlightthickness=0)
@@ -352,6 +378,18 @@ def run_gui(shutdown_event) -> None:
         else:
             next_bar["value"] = 0
             next_value_label.config(text="—")
+
+        learn_cd = _countdown_learn_sec(s)
+        learn_interval = s.get("learn_interval_seconds") or config.LEARN_INTERVAL_SECONDS
+        if learn_cd is not None and learn_interval and learn_interval > 0:
+            pct_learn = 100.0 * (learn_interval - learn_cd) / learn_interval
+            learn_bar["value"] = min(100, max(0, pct_learn))
+            h, r = divmod(learn_cd, 3600)
+            m, sec = divmod(r, 60)
+            learn_value_label.config(text=f"Next backtest in {int(h)}h {int(m)}m {int(sec)}s")
+        else:
+            learn_bar["value"] = 0
+            learn_value_label.config(text="—")
 
         mode_label.config(
             text="such dry run. no order. wow." if s.get("dry_run") else "very live. much trade." if s.get("allow_live") else "live off. such safe."

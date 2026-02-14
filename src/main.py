@@ -53,6 +53,9 @@ def _write_status(
     price: float,
     candles: list,
     strategy_period: int,
+    rsi_entry: int,
+    rsi_exit: int,
+    last_learn_time: float,
 ) -> None:
     """Write status.json for the UI (only when UI_ENABLED)."""
     if not config.UI_ENABLED:
@@ -77,8 +80,12 @@ def _write_status(
                 "gain_pct": round(gain_pct, 2),
                 "price": round(price, 6),
                 "rsi": round(rsi, 1) if rsi is not None else None,
+                "rsi_entry": rsi_entry,
+                "rsi_exit": rsi_exit,
                 "timestamp_utc": datetime.now(timezone.utc).isoformat(),
                 "next_check_seconds": config.POLL_INTERVAL_SECONDS,
+                "last_learn_timestamp_utc": datetime.fromtimestamp(last_learn_time, tz=timezone.utc).isoformat(),
+                "learn_interval_seconds": config.LEARN_INTERVAL_SECONDS,
                 "dry_run": config.DRY_RUN,
                 "allow_live": config.ALLOW_LIVE,
             }, f, indent=2)
@@ -134,6 +141,7 @@ def _bot_loop(strategy: RSIMeanReversion) -> None:
             _write_status(
                 float(doge), float(usd), in_position, sig,
                 portfolio_value, gain_usd, gain_pct, price, candles, strategy.period,
+                strategy.entry, strategy.exit, last_learn_time,
             )
             logger.info("Next check in %s seconds.", config.POLL_INTERVAL_SECONDS)
         except Exception as e:
