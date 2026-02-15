@@ -1,0 +1,12 @@
+#!/bin/bash
+# Launch Doge trading bot. Run from Doge.app; project root is parent of .app.
+set -e
+BIN="$(dirname "$0")"
+CONTENTS="$(dirname "$BIN")"
+APP="$(dirname "$CONTENTS")"
+PROJECT_ROOT="$(dirname "$APP")"
+cd "$PROJECT_ROOT"
+if [ -f ".venv/bin/activate" ]; then
+    source .venv/bin/activate
+fi
+exec python3 -m src.main

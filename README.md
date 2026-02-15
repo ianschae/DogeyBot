@@ -15,6 +15,7 @@ A simple Dogecoin (DOGE-USD) trading bot for **Coinbase Advanced Trade**. It use
 - [Gain tracking](#gain-tracking)
 - [Data and files](#data-and-files)
 - [GUI](#gui)
+- [Running as an app (macOS)](#running-as-an-app-macos)
 - [Testing](#testing)
 - [Security](#security)
 - [Running 24/7](#running-247)
@@ -167,6 +168,12 @@ With `UI_ENABLED=true` (default), a doge-themed window shows:
 **Assets:** Put **dogey.png** (and optionally **dogecoin.png**) in `src/assets/` for the main graphic and click-to-spawn coins. Click **“Much click. Wow coins.”** to spawn falling coins.
 
 Set `UI_ENABLED=false` in `.env` to run without the window (e.g. headless server).
+
+---
+
+## Running as an app (macOS)
+
+Double-click **Doge.app** in the project folder to run the bot without a terminal. The app uses your project’s `.venv` and `.env`; close the Doge window to quit. You can drag `Doge.app` to the Dock or Applications for quick access.
 
 ---
 
