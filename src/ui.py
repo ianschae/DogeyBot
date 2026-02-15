@@ -39,6 +39,8 @@ def _read_status() -> dict:
         "backtest_trades": None,
         "backtest_days": None,
         "backtest_granularity": None,
+        "backtest_return_range_low": None,
+        "backtest_return_range_high": None,
     }
     if not config.STATUS_FILE.exists():
         return default
@@ -593,6 +595,8 @@ def run_gui(shutdown_event) -> None:
         bt_trades = s.get("backtest_trades")
         bt_days = s.get("backtest_days")
         bt_gran = s.get("backtest_granularity")
+        bt_range_low = s.get("backtest_return_range_low")
+        bt_range_high = s.get("backtest_return_range_high")
         entry_r = s.get("rsi_entry")
         exit_r = s.get("rsi_exit")
         if bt_ret is not None and bt_trades is not None:
@@ -600,7 +604,8 @@ def run_gui(shutdown_event) -> None:
             if bt_days and bt_days > 0:
                 per_month = (bt_trades / bt_days) * 30
                 freq = f" (~{per_month:.1f}/month)"
-            _set_label(backtest_result_label, f"Last backtest: {bt_ret:+.2f}%, {bt_trades} trades{freq}")
+            range_str = f" (range {bt_range_low:.1f}%–{bt_range_high:.1f}%)" if (bt_range_low is not None and bt_range_high is not None) else ""
+            _set_label(backtest_result_label, f"Last backtest: {bt_ret:+.2f}%, {bt_trades} trades{freq}{range_str}")
             basis_parts = []
             if bt_gran:
                 basis_parts.append(f"{bt_gran}, 350 candles")

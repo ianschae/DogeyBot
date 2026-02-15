@@ -1,6 +1,7 @@
 """Learn RSI entry/exit by backtesting on recent DOGE-USD history. Writes learned_params.json."""
 import argparse
 import json
+import statistics
 import sys
 import time
 from pathlib import Path
@@ -108,10 +109,11 @@ def run_backtest(
     return return_pct, trades, usd, doge
 
 
-def run_learn(days: int = LEARN_DAYS, logger=None) -> Optional[tuple[int | None, int | None, float, int]]:
+def run_learn(days: int = LEARN_DAYS, logger=None) -> Optional[tuple[int | None, int | None, float, int, float | None, float | None]]:
     """Pull max history for each timeframe (ONE_HOUR, SIX_HOUR, ONE_DAY). Search every (entry, exit)
     on each. Pick the single (granularity, entry, exit) with highest return > 0. Write learned_params.json
-    including CANDLE_GRANULARITY. If none profitable, return (None, None, default_ret, default_tr) for UI."""
+    including CANDLE_GRANULARITY. Returns (entry, exit, return_pct, trades, range_low, range_high) where
+    range is median-to-max of profitable combos; if none profitable, (None, None, default_ret, default_tr, None, None)."""
     if logger:
         logger.info("Pulling all backdata across timeframes %s (max 350 candles each, %.1f%% fee per side)...",
             LEARN_GRANULARITIES, LEARN_FEE_PCT)
@@ -121,6 +123,7 @@ def run_learn(days: int = LEARN_DAYS, logger=None) -> Optional[tuple[int | None,
     best_exit = None
     best_granularity = None
     default_candles = None
+    profitable_returns: list[float] = []
     for granularity in LEARN_GRANULARITIES:
         candles = client.get_candles_max_history(granularity)
         if len(candles) < PERIOD + 2:
@@ -141,6 +144,7 @@ def run_learn(days: int = LEARN_DAYS, logger=None) -> Optional[tuple[int | None,
                 )
                 if full_ret <= 0 or full_tr < MIN_TRADES:
                     continue
+                profitable_returns.append(full_ret)
                 better = (
                     best_ret is None
                     or full_ret > best_ret
@@ -152,6 +156,12 @@ def run_learn(days: int = LEARN_DAYS, logger=None) -> Optional[tuple[int | None,
                     best_entry = entry
                     best_exit = exit_
                     best_granularity = granularity
+    # Use median as lower bound so the range is "middle of profitable combos to best", not min-to-best.
+    if profitable_returns:
+        range_high = max(profitable_returns)
+        range_low = statistics.median(profitable_returns)
+    else:
+        range_low = range_high = None
     if best_entry is not None and best_granularity is not None:
         out = {
             "RSI_PERIOD": PERIOD,
@@ -166,7 +176,7 @@ def run_learn(days: int = LEARN_DAYS, logger=None) -> Optional[tuple[int | None,
         if logger:
             logger.info("Best: %s, RSI < %s, RSI > %s → %s%%, %s trades. Saved to %s.",
                 best_granularity, best_entry, best_exit, f"{best_ret:.2f}", best_tr, path)
-        return (best_entry, best_exit, best_ret, best_tr)
+        return (best_entry, best_exit, best_ret, best_tr, range_low, range_high)
     if logger:
         logger.warning("No profitable combo across all timeframes. Using default params for display.")
     if default_candles is None or len(default_candles) < PERIOD + 2:
@@ -181,7 +191,7 @@ def run_learn(days: int = LEARN_DAYS, logger=None) -> Optional[tuple[int | None,
         full_ret, full_tr, _, _ = run_backtest(
             default_candles, default_entry, default_exit, LEARN_FEE_PCT, LEARN_SLIPPAGE_PCT, rsi_series
         )
-        return (None, None, full_ret, full_tr)
+        return (None, None, full_ret, full_tr, None, None)
     except Exception:
         return None
 
@@ -195,10 +205,11 @@ def main():
     if result is None:
         print("No profitable combo found (and could not run defaults backtest). Keeping defaults.")
         sys.exit(0)
-    entry, exit_, return_pct, trades = result
+    entry, exit_, return_pct, trades, range_low, range_high = result
     if entry is not None and exit_ is not None:
         path = Path(__file__).resolve().parent.parent / "learned_params.json"
-        print(f"Best: entry={entry}, exit={exit_} -> backtest {return_pct:.2f}%, {trades} trades")
+        range_str = f" (reasonable range: {range_low:.1f}%–{range_high:.1f}%)" if range_low is not None and range_high is not None else ""
+        print(f"Best: entry={entry}, exit={exit_} -> backtest {return_pct:.2f}%, {trades} trades{range_str}")
         print(f"Wrote {path}")
         print("Restart the bot (python -m src.main) to use these params.")
     else:

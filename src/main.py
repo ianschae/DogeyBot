@@ -24,8 +24,8 @@ logger = logging.getLogger(__name__)
 
 _shutdown = False
 _ui_shutdown_ref: threading.Event | None = None  # set when GUI is used, so Ctrl+C can close it
-# Last backtest result for UI: (overall_return_pct, total_trades)
-_last_backtest: tuple[float | None, int | None] = (None, None)
+# Last backtest result for UI: (overall_return_pct, total_trades, range_low, range_high)
+_last_backtest: tuple[float | None, int | None, float | None, float | None] = (None, None, None, None)
 
 
 def _handle_sig(signum, frame):
@@ -69,6 +69,8 @@ def _write_status(
     backtest_trades: int | None = None,
     backtest_days: int | None = None,
     backtest_granularity: str | None = None,
+    backtest_return_range_low: float | None = None,
+    backtest_return_range_high: float | None = None,
     last_trading_check_utc: str | None = None,
 ) -> None:
     """Write status.json for the UI (only when UI_ENABLED). last_trading_check_utc: when set, UI uses it for 'next check' countdown (so 15s refresh doesn't reset the 60s countdown)."""
@@ -117,6 +119,10 @@ def _write_status(
         payload["backtest_days"] = backtest_days
     if backtest_granularity is not None:
         payload["backtest_granularity"] = backtest_granularity
+    if backtest_return_range_low is not None:
+        payload["backtest_return_range_low"] = round(backtest_return_range_low, 2)
+    if backtest_return_range_high is not None:
+        payload["backtest_return_range_high"] = round(backtest_return_range_high, 2)
     if last_trading_check_utc is not None:
         payload["last_trading_check_utc"] = last_trading_check_utc
     try:
@@ -197,6 +203,8 @@ def _fetch_and_write_status(
         backtest_trades=_last_backtest[1],
         backtest_days=config.LEARN_DAYS,
         backtest_granularity=config.CANDLE_GRANULARITY,
+        backtest_return_range_low=_last_backtest[2],
+        backtest_return_range_high=_last_backtest[3],
         last_trading_check_utc=trading_check_utc,
     )
     if log:
@@ -216,9 +224,9 @@ def _bot_loop(strategy: RSIMeanReversion) -> None:
                     learned = learn.run_learn(days=config.LEARN_DAYS, logger=logger)
                     last_learn_time = time.time()
                     if learned is not None:
-                        entry, exit_, return_pct, trades = learned
+                        entry, exit_, return_pct, trades, range_low, range_high = learned
                         global _last_backtest
-                        _last_backtest = (return_pct, trades)
+                        _last_backtest = (return_pct, trades, range_low, range_high)
                         if entry is not None and exit_ is not None:
                             period = learn.PERIOD
                             strategy.period = period
@@ -253,8 +261,8 @@ def main():
     global _last_backtest
     learned = learn.run_learn(days=config.LEARN_DAYS, logger=logger)
     if learned is not None:
-        entry, exit_, return_pct, trades = learned
-        _last_backtest = (return_pct, trades)
+        entry, exit_, return_pct, trades, range_low, range_high = learned
+        _last_backtest = (return_pct, trades, range_low, range_high)
         if entry is not None and exit_ is not None:
             period = learn.PERIOD
             strategy = RSIMeanReversion(period=period, entry=entry, exit=exit_)
