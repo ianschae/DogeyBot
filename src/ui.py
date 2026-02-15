@@ -341,22 +341,15 @@ def run_gui(shutdown_event) -> None:
     bars_f.pack(fill=tk.X, pady=(pad_md, 0))
     strategy_f = tk.Frame(bars_f, bg=card_bg, highlightbackground=border, highlightthickness=1, padx=6, pady=4)
     strategy_f.pack(fill=tk.X, pady=(0, pad_md))
-    tk.Label(strategy_f, text="very RSI", font=font_label, bg=card_bg, fg=fg_muted).pack(anchor=tk.W, pady=(0, 1))
+    tk.Label(strategy_f, text="RSI", font=font_label, bg=card_bg, fg=fg_muted).pack(anchor=tk.W, pady=(0, 1))
     rsi_row = tk.Frame(strategy_f, bg=card_bg)
     rsi_row.pack(fill=tk.X, pady=(0, 1))
     rsi_bar = ttk.Progressbar(rsi_row, length=200, mode="determinate", maximum=100, style="Warm.Horizontal.TProgressbar")
     rsi_bar.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 4))
     rsi_value_label = tk.Label(rsi_row, text="—", font=font_label, bg=card_bg, fg=fg_primary)
     rsi_value_label.pack(side=tk.LEFT)
-    rsi_zone_label = tk.Label(strategy_f, text="—", font=font_label, bg=card_bg, fg=fg_muted)
-    rsi_zone_label.pack(anchor=tk.W, pady=(0, 2))
-    tk.Label(strategy_f, text="Status (what the bot is doing and why)", font=font_label, bg=card_bg, fg=fg_muted).pack(anchor=tk.W, pady=(4, 1))
-    bot_doing_label = tk.Label(strategy_f, text="—", font=font_label, bg=card_bg, fg=fg_primary, wraplength=380)
-    bot_doing_label.pack(anchor=tk.W, pady=(0, 2))
-    backtest_result_label = tk.Label(strategy_f, text="", font=font_label, bg=card_bg, fg=fg_muted)
-    backtest_result_label.pack(anchor=tk.W)
-    backtest_basis_label = tk.Label(strategy_f, text="", font=font_label, bg=card_bg, fg=fg_muted)
-    backtest_basis_label.pack(anchor=tk.W)
+    strategy_explanation_label = tk.Label(strategy_f, text="—", font=font_label, bg=card_bg, fg=fg_primary, wraplength=380, justify=tk.LEFT)
+    strategy_explanation_label.pack(anchor=tk.W, pady=(4, 0))
 
     tk.Label(bars_f, text="many seconds until next backtest", font=font_label, bg=bg, fg=fg_muted).pack(anchor=tk.W, pady=(pad_sm, 1))
     learn_bar = ttk.Progressbar(bars_f, length=220, mode="determinate", maximum=100, style="Warm.Horizontal.TProgressbar")
@@ -563,20 +556,29 @@ def run_gui(shutdown_event) -> None:
             _set_label(rsi_value_label, "RSI = —")
         entry_r = s.get("rsi_entry")
         exit_r = s.get("rsi_exit")
-        rsi_zone_text = f"buy when RSI < {entry_r}, sell when RSI > {exit_r}" if (entry_r is not None and exit_r is not None) else "—"
-        _set_label(rsi_zone_label, rsi_zone_text)
-        # What the bot is doing and why (clear full sentences; "Updated Xs ago" at bottom is source of truth for refresh)
+        bt_gran = s.get("backtest_granularity") or "candles"
+        entry_r = entry_r if entry_r is not None else 30
+        exit_r = exit_r if exit_r is not None else 50
+        # One flowing explanation: what we trade on, what’s happening now, and last backtest
         if rsi_val is None:
-            doing_text = "Waiting for enough candle data to compute RSI. No decision yet."
+            current_bit = "We're still waiting for enough closed candles to compute RSI, so no decision yet."
         elif sig == "buy":
-            doing_text = f"Buying: RSI is {fmt(rsi_val)}, which is below the buy threshold ({entry_r}). The bot is placing a buy order."
+            current_bit = f"RSI is {fmt(rsi_val)}, below the buy threshold ({entry_r}), so we're buying."
         elif sig == "sell":
-            doing_text = f"Selling: RSI is {fmt(rsi_val)}, which is above the sell threshold ({exit_r}). The bot is selling DOGE."
+            current_bit = f"RSI is {fmt(rsi_val)}, above the sell threshold ({exit_r}), so we're selling DOGE."
         elif s.get("in_position"):
-            doing_text = f"Holding: RSI is {fmt(rsi_val)}, still below the sell threshold ({exit_r}). Waiting for RSI to rise above {exit_r} before selling."
+            current_bit = f"RSI is {fmt(rsi_val)}, still below the sell threshold ({exit_r}), so we're holding until RSI rises above {exit_r}."
         else:
-            doing_text = f"Holding: RSI is {fmt(rsi_val)}, above the buy threshold ({entry_r}). Waiting for RSI to drop below {entry_r} before buying."
-        _set_label(bot_doing_label, doing_text)
+            current_bit = f"RSI is {fmt(rsi_val)}, above the buy threshold ({entry_r}), so we're holding until RSI drops below {entry_r}."
+        intro = f"We're trading DOGE using RSI(14) on the last 350 {bt_gran} closed candles. We buy when RSI drops below {entry_r} and sell when it rises above {exit_r}. RSI and every decision use only closed candles, so the value updates when a new candle closes."
+        explanation = f"{intro}\n\nRight now: {current_bit}"
+        bt_ret = s.get("backtest_return_pct")
+        bt_trades = s.get("backtest_trades")
+        bt_days = s.get("backtest_days")
+        if bt_ret is not None and bt_trades is not None:
+            freq = f" (~{(bt_trades / bt_days) * 30:.1f}/month)" if bt_days and bt_days > 0 else ""
+            explanation += f"\n\nOn the last backtest this setup would have returned {bt_ret:+.2f}% over {bt_trades} trades{freq}."
+        _set_label(strategy_explanation_label, explanation)
 
         learn_cd = _countdown_learn_sec(s)
         learn_interval = s.get("learn_interval_seconds") or config.LEARN_INTERVAL_SECONDS
@@ -589,27 +591,6 @@ def run_gui(shutdown_event) -> None:
         else:
             _set_bar(learn_bar, 0)
             _set_label(learn_value_label, "—")
-        bt_ret = s.get("backtest_return_pct")
-        bt_trades = s.get("backtest_trades")
-        bt_days = s.get("backtest_days")
-        bt_gran = s.get("backtest_granularity")
-        entry_r = s.get("rsi_entry")
-        exit_r = s.get("rsi_exit")
-        if bt_ret is not None and bt_trades is not None:
-            freq = ""
-            if bt_days and bt_days > 0:
-                per_month = (bt_trades / bt_days) * 30
-                freq = f" (~{per_month:.1f}/month)"
-            _set_label(backtest_result_label, f"Last backtest: {bt_ret:+.2f}%, {bt_trades} trades{freq}")
-            basis_parts = []
-            if bt_gran:
-                basis_parts.append(f"{bt_gran}, 350 candles")
-            if entry_r is not None and exit_r is not None:
-                basis_parts.append(f"RSI < {entry_r}, RSI > {exit_r}")
-            _set_label(backtest_basis_label, "Based on: " + " · ".join(basis_parts) if basis_parts else "")
-        else:
-            _set_label(backtest_result_label, "")
-            _set_label(backtest_basis_label, "")
 
         mode_text = "such dry run. no order. wow." if s.get("dry_run") else "very live. much trade." if s.get("allow_live") else "live off. such safe."
         _set_label(mode_label, mode_text)
