@@ -245,9 +245,9 @@ def run_gui(shutdown_event) -> None:
 
     root = tk.Tk()
     root.title("Doge. Such Trade. Wow.")
-    root.minsize(520, 720)
+    root.minsize(420, 580)
     root.resizable(True, True)
-    root.configure(bg="#fffbf0", padx=24, pady=20)
+    root.configure(bg="#fffbf0", padx=12, pady=10)
     bg = "#fffbf0"
     card_bg = "#f0e6d0"
     border = "#d4c4a0"  # subtle warm border for polish
@@ -261,28 +261,28 @@ def run_gui(shutdown_event) -> None:
     COIN_FALL_MS = 35
 
     # Load and show multiple Doge images (keep refs so they aren’t GC’d)
-    doge_photos = _load_doge_images(max_size=200, small_size=72)
+    doge_photos = _load_doge_images(max_size=80, small_size=36)
     photo_refs = [p[0] for p in doge_photos]
     try:
-        font_title = tkfont.Font(family="Comic Sans MS", size=22, weight="bold")
-        font_score = tkfont.Font(family="Comic Sans MS", size=36, weight="bold")
-        font_stat = tkfont.Font(family="Comic Sans MS", size=16, weight="bold")
-        font_label = tkfont.Font(family="Comic Sans MS", size=12)
-        font_party = tkfont.Font(family="Comic Sans MS", size=20, weight="bold")
+        font_title = tkfont.Font(family="Comic Sans MS", size=14, weight="bold")
+        font_score = tkfont.Font(family="Comic Sans MS", size=22, weight="bold")
+        font_stat = tkfont.Font(family="Comic Sans MS", size=11, weight="bold")
+        font_label = tkfont.Font(family="Comic Sans MS", size=10)
+        font_party = tkfont.Font(family="Comic Sans MS", size=12, weight="bold")
     except tk.TclError:
-        font_title = tkfont.Font(family="Helvetica", size=22, weight="bold")
-        font_score = tkfont.Font(family="Helvetica", size=36, weight="bold")
-        font_stat = tkfont.Font(family="Helvetica", size=16, weight="bold")
-        font_label = tkfont.Font(family="Helvetica", size=12)
-        font_party = tkfont.Font(family="Helvetica", size=20, weight="bold")
+        font_title = tkfont.Font(family="Helvetica", size=14, weight="bold")
+        font_score = tkfont.Font(family="Helvetica", size=22, weight="bold")
+        font_stat = tkfont.Font(family="Helvetica", size=11, weight="bold")
+        font_label = tkfont.Font(family="Helvetica", size=10)
+        font_party = tkfont.Font(family="Helvetica", size=12, weight="bold")
 
-    # Shared palette and spacing
+    # Shared palette and spacing (tighter so it fits)
     fg_primary = "#3d2914"
     fg_accent = "#c9a227"
     fg_muted = "#8b7355"
     fg_success = "#2d8a3e"
     fg_danger = "#c0392b"
-    pad_sm, pad_md, pad_lg = 6, 12, 18
+    pad_sm, pad_md, pad_lg = 2, 6, 8
 
     # Style progress bars to match the warm theme
     style = ttk.Style()
@@ -302,11 +302,11 @@ def run_gui(shutdown_event) -> None:
         tk.Label(center_f, image=doge_photos[0][0], bg=bg).pack()
         if len(doge_photos) > 1:
             row_small = tk.Frame(center_f, bg=bg)
-            row_small.pack(pady=(6, 0))
+            row_small.pack(pady=(2, 0))
             for (ph, _) in doge_photos[1:4]:
-                tk.Label(row_small, image=ph, bg=bg).pack(side=tk.LEFT, padx=6)
+                tk.Label(row_small, image=ph, bg=bg).pack(side=tk.LEFT, padx=2)
     else:
-        tk.Label(center_f, text="\ud83d\udc15", font=("Helvetica", 72), bg=bg, fg=fg_accent).pack()
+        tk.Label(center_f, text="\ud83d\udc15", font=("Helvetica", 36), bg=bg, fg=fg_accent).pack()
 
     score_label = tk.Label(root, text="$—", font=font_score, bg=bg, fg=fg_primary)
     score_label.pack(pady=(pad_lg, pad_sm))
@@ -320,8 +320,8 @@ def run_gui(shutdown_event) -> None:
     stat_keys = ("doge", "usd", "gain", "move", "price")
     stat_labels = {}
     for col, (name, key) in enumerate(zip(stat_names, stat_keys)):
-        f = tk.Frame(stats_f, bg=card_bg, highlightbackground=border, highlightthickness=1, padx=pad_md, pady=pad_md)
-        f.grid(row=0, column=col, padx=5, pady=0, sticky="nsew")
+        f = tk.Frame(stats_f, bg=card_bg, highlightbackground=border, highlightthickness=1, padx=4, pady=3)
+        f.grid(row=0, column=col, padx=2, pady=0, sticky="nsew")
         tk.Label(f, text=name, font=font_label, bg=card_bg, fg=fg_muted).pack()
         lbl = tk.Label(f, text="—", font=font_stat, bg=card_bg, fg=fg_primary)
         lbl.pack()
@@ -329,8 +329,8 @@ def run_gui(shutdown_event) -> None:
     extra_names = ("peak portfolio", "days tracked", "avg daily %", "USD daily", "24h change")
     extra_keys = ("peak", "days", "avg_daily", "usd_daily", "change_24h")
     for col, (name, key) in enumerate(zip(extra_names, extra_keys)):
-        f = tk.Frame(stats_f, bg=card_bg, highlightbackground=border, highlightthickness=1, padx=pad_md, pady=pad_md)
-        f.grid(row=1, column=col, padx=5, pady=(6, 0), sticky="nsew")
+        f = tk.Frame(stats_f, bg=card_bg, highlightbackground=border, highlightthickness=1, padx=4, pady=3)
+        f.grid(row=1, column=col, padx=2, pady=(2, 0), sticky="nsew")
         tk.Label(f, text=name, font=font_label, bg=card_bg, fg=fg_muted).pack()
         lbl = tk.Label(f, text="—", font=font_stat, bg=card_bg, fg=fg_primary)
         lbl.pack()
@@ -339,31 +339,31 @@ def run_gui(shutdown_event) -> None:
     # Strategy & timers: one bordered section for visual grouping
     bars_f = tk.Frame(root, bg=bg)
     bars_f.pack(fill=tk.X, pady=(pad_md, 0))
-    strategy_f = tk.Frame(bars_f, bg=card_bg, highlightbackground=border, highlightthickness=1, padx=pad_md, pady=pad_md)
+    strategy_f = tk.Frame(bars_f, bg=card_bg, highlightbackground=border, highlightthickness=1, padx=6, pady=4)
     strategy_f.pack(fill=tk.X, pady=(0, pad_md))
-    tk.Label(strategy_f, text="very RSI", font=font_label, bg=card_bg, fg=fg_muted).pack(anchor=tk.W, pady=(0, 2))
+    tk.Label(strategy_f, text="very RSI", font=font_label, bg=card_bg, fg=fg_muted).pack(anchor=tk.W, pady=(0, 1))
     rsi_row = tk.Frame(strategy_f, bg=card_bg)
-    rsi_row.pack(fill=tk.X, pady=(0, 2))
-    rsi_bar = ttk.Progressbar(rsi_row, length=380, mode="determinate", maximum=100, style="Warm.Horizontal.TProgressbar")
-    rsi_bar.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 8))
+    rsi_row.pack(fill=tk.X, pady=(0, 1))
+    rsi_bar = ttk.Progressbar(rsi_row, length=200, mode="determinate", maximum=100, style="Warm.Horizontal.TProgressbar")
+    rsi_bar.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 4))
     rsi_value_label = tk.Label(rsi_row, text="—", font=font_label, bg=card_bg, fg=fg_primary)
     rsi_value_label.pack(side=tk.LEFT)
     rsi_zone_label = tk.Label(strategy_f, text="—", font=font_label, bg=card_bg, fg=fg_muted)
-    rsi_zone_label.pack(anchor=tk.W, pady=(0, 4))
+    rsi_zone_label.pack(anchor=tk.W, pady=(0, 2))
     backtest_result_label = tk.Label(strategy_f, text="", font=font_label, bg=card_bg, fg=fg_muted)
     backtest_result_label.pack(anchor=tk.W)
     backtest_basis_label = tk.Label(strategy_f, text="", font=font_label, bg=card_bg, fg=fg_muted)
     backtest_basis_label.pack(anchor=tk.W)
 
-    tk.Label(bars_f, text="many seconds until next check", font=font_label, bg=bg, fg=fg_muted).pack(anchor=tk.W, pady=(pad_sm, 2))
-    next_bar = ttk.Progressbar(bars_f, length=400, mode="determinate", maximum=100, style="Warm.Horizontal.TProgressbar")
-    next_bar.pack(fill=tk.X, pady=(0, 2))
+    tk.Label(bars_f, text="many seconds until next check", font=font_label, bg=bg, fg=fg_muted).pack(anchor=tk.W, pady=(pad_sm, 1))
+    next_bar = ttk.Progressbar(bars_f, length=220, mode="determinate", maximum=100, style="Warm.Horizontal.TProgressbar")
+    next_bar.pack(fill=tk.X, pady=(0, 1))
     next_value_label = tk.Label(bars_f, text="—", font=font_label, bg=bg, fg=fg_primary)
-    next_value_label.pack(anchor=tk.W, pady=(0, pad_md))
+    next_value_label.pack(anchor=tk.W, pady=(0, pad_sm))
 
-    tk.Label(bars_f, text="many seconds until next backtest", font=font_label, bg=bg, fg=fg_muted).pack(anchor=tk.W, pady=(pad_sm, 2))
-    learn_bar = ttk.Progressbar(bars_f, length=400, mode="determinate", maximum=100, style="Warm.Horizontal.TProgressbar")
-    learn_bar.pack(fill=tk.X, pady=(0, 2))
+    tk.Label(bars_f, text="many seconds until next backtest", font=font_label, bg=bg, fg=fg_muted).pack(anchor=tk.W, pady=(pad_sm, 1))
+    learn_bar = ttk.Progressbar(bars_f, length=220, mode="determinate", maximum=100, style="Warm.Horizontal.TProgressbar")
+    learn_bar.pack(fill=tk.X, pady=(0, 1))
     learn_value_label = tk.Label(bars_f, text="—", font=font_label, bg=bg, fg=fg_primary)
     learn_value_label.pack(anchor=tk.W, pady=(0, pad_lg))
 
@@ -394,7 +394,7 @@ def run_gui(shutdown_event) -> None:
             speed = data["speed"] if data else 5
             coin_canvas.move(cid, 0, speed)
             x, y = coin_canvas.coords(cid)
-            h = coin_canvas.winfo_height() or 720
+            h = coin_canvas.winfo_height() or 580
             if y < h + 60:
                 root.after(COIN_FALL_MS, lambda c=cid: fall_step(c))
             else:
@@ -406,11 +406,11 @@ def run_gui(shutdown_event) -> None:
     def spawn_one_coin(speed_mult=1.0):
         if not coin_photos_by_layer:
             return
-        w = coin_canvas.winfo_width() or 520
+        w = coin_canvas.winfo_width() or 420
         layer = random.randint(0, min(2, len(coin_photos_by_layer) - 1))
         photo, size, base_speed = coin_photos_by_layer[layer]
         speed = max(2, int(base_speed * speed_mult))
-        x = random.randint(0, w) if w > 0 else random.randint(0, 520)
+        x = random.randint(0, w) if w > 0 else random.randint(0, 420)
         cid = coin_canvas.create_image(x, -size - 10, image=photo, tags=("coin", f"layer{layer}"))
         coin_data[cid] = {"speed": speed, "layer": layer}
         coin_canvas.tag_lower("layer0")
@@ -420,8 +420,8 @@ def run_gui(shutdown_event) -> None:
     def spawn_click_popup():
         """Short-lived popup at a random position with a random color."""
         try:
-            w = coin_canvas.winfo_width() or 520
-            h = coin_canvas.winfo_height() or 720
+            w = coin_canvas.winfo_width() or 420
+            h = coin_canvas.winfo_height() or 580
             x = random.randint(50, max(51, w - 50))
             y = random.randint(50, max(51, h - 50))
             text = random.choice(CLICK_POPUPS)
@@ -453,11 +453,11 @@ def run_gui(shutdown_event) -> None:
 
     # Party phrase: always in layout (fixed height) to avoid glitch when toggling
     party_label = tk.Label(root, text="", font=font_party, bg=bg, fg=fg_accent, height=1)
-    party_label.pack(pady=(4, 2))
+    party_label.pack(pady=(2, 1))
     party_phrase_until = [0.0]
 
-    btn_canvas = tk.Canvas(root, width=320, height=56, bg=bg, highlightthickness=0, cursor="hand2")
-    btn_canvas.pack(pady=(6, pad_md))
+    btn_canvas = tk.Canvas(root, width=200, height=36, bg=bg, highlightthickness=0, cursor="hand2")
+    btn_canvas.pack(pady=(4, pad_md))
 
     def draw_rounded_rect(c, x1, y1, x2, y2, r, fill, outline, width=2):
         c.create_arc(x1, y1, x1 + 2 * r, y1 + 2 * r, start=90, extent=90, fill=fill, outline=outline, width=width)
@@ -467,8 +467,8 @@ def run_gui(shutdown_event) -> None:
         c.create_rectangle(x1 + r, y1, x2 - r, y2, fill=fill, outline=fill)
         c.create_rectangle(x1, y1 + r, x2, y2 - r, fill=fill, outline=fill)
 
-    draw_rounded_rect(btn_canvas, 4, 4, 316, 52, 14, "#e6b800", border, 2)
-    btn_canvas.create_text(160, 28, text="Much click. Wow coins.", font=font_stat, fill=fg_primary)
+    draw_rounded_rect(btn_canvas, 2, 2, 198, 34, 8, "#e6b800", border, 1)
+    btn_canvas.create_text(100, 18, text="Much click. Wow coins.", font=font_stat, fill=fg_primary)
     def on_coin_click(e):
         spawn_coin()
 
