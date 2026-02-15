@@ -565,19 +565,17 @@ def run_gui(shutdown_event) -> None:
         exit_r = s.get("rsi_exit")
         rsi_zone_text = f"buy when RSI < {entry_r}, sell when RSI > {exit_r}" if (entry_r is not None and exit_r is not None) else "—"
         _set_label(rsi_zone_label, rsi_zone_text)
-        # What the bot is doing and why (one line; "Updated Xs ago" at bottom is source of truth for refresh)
-        move_text_doing = "BUY" if sig == "buy" else "SELL" if sig == "sell" else "HODL"
+        # What the bot is doing and why (clear full sentences; "Updated Xs ago" at bottom is source of truth for refresh)
         if rsi_val is None:
-            reason = "Need more candles for RSI."
+            doing_text = "Waiting for enough candle data to compute RSI. No decision yet."
         elif sig == "buy":
-            reason = f"RSI {fmt(rsi_val)} < entry {entry_r} → buying."
+            doing_text = f"Buying: RSI is {fmt(rsi_val)}, which is below the buy threshold ({entry_r}). The bot is placing a buy order."
         elif sig == "sell":
-            reason = f"RSI {fmt(rsi_val)} > exit {exit_r} → selling."
+            doing_text = f"Selling: RSI is {fmt(rsi_val)}, which is above the sell threshold ({exit_r}). The bot is selling DOGE."
         elif s.get("in_position"):
-            reason = f"RSI {fmt(rsi_val)} ≤ exit {exit_r} → holding until RSI > {exit_r}."
+            doing_text = f"Holding: RSI is {fmt(rsi_val)}, still below the sell threshold ({exit_r}). Waiting for RSI to rise above {exit_r} before selling."
         else:
-            reason = f"RSI {fmt(rsi_val)} ≥ entry {entry_r} → waiting for RSI < {entry_r}."
-        doing_text = f"Decision: {move_text_doing}. {reason}"
+            doing_text = f"Holding: RSI is {fmt(rsi_val)}, above the buy threshold ({entry_r}). Waiting for RSI to drop below {entry_r} before buying."
         _set_label(bot_doing_label, doing_text)
 
         learn_cd = _countdown_learn_sec(s)
