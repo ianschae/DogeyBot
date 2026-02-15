@@ -31,6 +31,8 @@ A simple Dogecoin (DOGE-USD) trading bot for **Coinbase Advanced Trade**. It use
 
 By default the bot runs in **dry-run** mode: it logs what it would do but does not place real orders. Enable live trading by setting `DRY_RUN=false` and `ALLOW_LIVE=true` in `.env`.
 
+On **macOS** you can run the bot as a normal app: double-click **Doge.app** in the project folder (no terminal needed); close the window to quit. See [Running as an app (macOS)](#running-as-an-app-macos).
+
 ---
 
 ## Quick start
@@ -49,6 +51,8 @@ python -m src.main
 ```
 
 This starts the learning run, then the trading loop and (if enabled) the GUI. Use Ctrl+C to stop.
+
+**macOS:** You can instead double-click **Doge.app** to run without a terminal; see [Running as an app (macOS)](#running-as-an-app-macos).
 
 ---
 
