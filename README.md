@@ -116,6 +116,15 @@ So: you only **buy** when you hold no (or dust) DOGE and RSI is below the learne
 - **Backtest assumptions:** 0.6% fee per side (Coinbase maker), and post-only style fills (buy at close×0.999, sell at close×1.001). No slippage.
 - **If no profitable combo:** The bot keeps current RSI params and uses SIX_HOUR; it does not overwrite `learned_params.json` with a losing combo.
 
+**What the backtest result means:** The backtest tells you what *would have* happened on that past window (return %, number of trades) with the chosen timeframe and RSI levels. The bot then uses that same strategy live. So the implied prediction is: if the future behaves similarly to that past period, you’d expect something in that ballpark — same idea as “history repeats.” It’s not a guarantee, because the future may not repeat; treat the number as “this combo looked good on that history.”
+
+**Assumptions underlying the approach:**
+
+- **Param selection:** We choose the (timeframe, RSI entry, RSI exit) with highest backtest return on the most recent 350 candles and trade that combo until the next re-learn. No out-of-sample test; the same window is used for both selection and the reported result.
+- **Trade count as signal:** A higher number of round-trip trades in the backtest (e.g. ~20) is treated as weak evidence that the return is not driven by one or two lucky fills; the strategy had to trigger repeatedly in that window.
+- **Regime recurrence:** The backtest window may be a one-off favorable slice or a regime that recurs. We assume that re-running the backtest periodically (e.g. every 24h) on rolling history makes it likely we will repeatedly find at least some profitable param sets when similar conditions appear.
+- **Param stability:** The search grid is bounded (entry 10–45, exit 41–76, fixed RSI(14) mean-reversion rule). We assume that when the “best” params change, they will typically move within that band, so updates are incremental and do not cause large, discontinuous changes in trading behavior.
+
 **Standalone learning:** Run `python -m src.learn` to run the same process once and write `learned_params.json`. Option: `--days 60` (used only for logging; history is still capped by 350 candles per timeframe). Override backtest fee with `LEARN_FEE_PCT` in `.env`.
 
 ---
