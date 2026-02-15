@@ -350,22 +350,13 @@ def run_gui(shutdown_event) -> None:
     rsi_value_label.pack(side=tk.LEFT)
     rsi_zone_label = tk.Label(strategy_f, text="—", font=font_label, bg=card_bg, fg=fg_muted)
     rsi_zone_label.pack(anchor=tk.W, pady=(0, 2))
-    tk.Label(strategy_f, text="such status (what bot doing)", font=font_label, bg=card_bg, fg=fg_muted).pack(anchor=tk.W, pady=(4, 1))
+    tk.Label(strategy_f, text="Status (what the bot is doing and why)", font=font_label, bg=card_bg, fg=fg_muted).pack(anchor=tk.W, pady=(4, 1))
     bot_doing_label = tk.Label(strategy_f, text="—", font=font_label, bg=card_bg, fg=fg_primary, wraplength=380)
-    bot_doing_label.pack(anchor=tk.W)
-    tk.Label(strategy_f, text="very reason (why)", font=font_label, bg=card_bg, fg=fg_muted).pack(anchor=tk.W, pady=(2, 1))
-    bot_why_label = tk.Label(strategy_f, text="—", font=font_label, bg=card_bg, fg=fg_primary, wraplength=380)
-    bot_why_label.pack(anchor=tk.W, pady=(0, 2))
+    bot_doing_label.pack(anchor=tk.W, pady=(0, 2))
     backtest_result_label = tk.Label(strategy_f, text="", font=font_label, bg=card_bg, fg=fg_muted)
     backtest_result_label.pack(anchor=tk.W)
     backtest_basis_label = tk.Label(strategy_f, text="", font=font_label, bg=card_bg, fg=fg_muted)
     backtest_basis_label.pack(anchor=tk.W)
-
-    tk.Label(bars_f, text="many seconds until next check", font=font_label, bg=bg, fg=fg_muted).pack(anchor=tk.W, pady=(pad_sm, 1))
-    next_bar = ttk.Progressbar(bars_f, length=220, mode="determinate", maximum=100, style="Warm.Horizontal.TProgressbar")
-    next_bar.pack(fill=tk.X, pady=(0, 1))
-    next_value_label = tk.Label(bars_f, text="—", font=font_label, bg=bg, fg=fg_primary)
-    next_value_label.pack(anchor=tk.W, pady=(0, pad_sm))
 
     tk.Label(bars_f, text="many seconds until next backtest", font=font_label, bg=bg, fg=fg_muted).pack(anchor=tk.W, pady=(pad_sm, 1))
     learn_bar = ttk.Progressbar(bars_f, length=220, mode="determinate", maximum=100, style="Warm.Horizontal.TProgressbar")
@@ -525,14 +516,12 @@ def run_gui(shutdown_event) -> None:
             root.quit()
             return
         s = _read_status()
-        cd = _countdown_sec(s)
         pv = s.get("portfolio_value") or 0
         gu = s.get("gain_usd") or 0
         gp = s.get("gain_pct") or 0
         sig = (s.get("signal") or "hold").lower()
         move_text = "BUY" if sig == "buy" else "SELL" if sig == "sell" else "HODL"
         rsi_val = s.get("rsi")
-        next_sec = s.get("next_check_seconds") or config.STATUS_REFRESH_SECONDS
 
         _set_label(score_label, f"${fmt(pv)}")
         _set_label(stat_labels["doge"], fmt_doge(s.get("doge")))
@@ -576,29 +565,20 @@ def run_gui(shutdown_event) -> None:
         exit_r = s.get("rsi_exit")
         rsi_zone_text = f"buy when RSI < {entry_r}, sell when RSI > {exit_r}" if (entry_r is not None and exit_r is not None) else "—"
         _set_label(rsi_zone_label, rsi_zone_text)
-        # What the bot is doing and why
+        # What the bot is doing and why (one line; "Updated Xs ago" at bottom is source of truth for refresh)
         move_text_doing = "BUY" if sig == "buy" else "SELL" if sig == "sell" else "HODL"
-        doing_text = f"Waiting for next check in {cd}s. Last decision: {move_text_doing}." if cd is not None else f"Last decision: {move_text_doing}."
-        _set_label(bot_doing_label, doing_text)
         if rsi_val is None:
-            why_text = "Need more candles for RSI."
+            reason = "Need more candles for RSI."
         elif sig == "buy":
-            why_text = f"RSI {fmt(rsi_val)} < entry {entry_r} → buying."
+            reason = f"RSI {fmt(rsi_val)} < entry {entry_r} → buying."
         elif sig == "sell":
-            why_text = f"RSI {fmt(rsi_val)} > exit {exit_r} → selling."
+            reason = f"RSI {fmt(rsi_val)} > exit {exit_r} → selling."
         elif s.get("in_position"):
-            why_text = f"RSI {fmt(rsi_val)} ≤ exit {exit_r} → holding until RSI > {exit_r}."
+            reason = f"RSI {fmt(rsi_val)} ≤ exit {exit_r} → holding until RSI > {exit_r}."
         else:
-            why_text = f"RSI {fmt(rsi_val)} ≥ entry {entry_r} → waiting for RSI < {entry_r}."
-        _set_label(bot_why_label, why_text)
-
-        if cd is not None and next_sec and next_sec > 0:
-            pct = 100.0 * (next_sec - cd) / next_sec
-            _set_bar(next_bar, pct)
-            _set_label(next_value_label, f"Next check in {cd}s")
-        else:
-            _set_bar(next_bar, 0)
-            _set_label(next_value_label, "—")
+            reason = f"RSI {fmt(rsi_val)} ≥ entry {entry_r} → waiting for RSI < {entry_r}."
+        doing_text = f"Decision: {move_text_doing}. {reason}"
+        _set_label(bot_doing_label, doing_text)
 
         learn_cd = _countdown_learn_sec(s)
         learn_interval = s.get("learn_interval_seconds") or config.LEARN_INTERVAL_SECONDS
