@@ -1,4 +1,5 @@
 """Execution engine: apply signal with min-size check and cooldown; dry_run logs only."""
+import json
 import logging
 import time
 from decimal import Decimal
@@ -9,6 +10,25 @@ from . import client
 logger = logging.getLogger(__name__)
 
 _last_order_time: float = 0.0
+
+
+def _increment_trades_made() -> None:
+    """Increment and persist the number of real orders placed (for UI tracker)."""
+    path = config.TRADES_COUNT_FILE
+    try:
+        count = 0
+        if path.exists():
+            with open(path) as f:
+                data = json.load(f)
+            if isinstance(data, dict) and "trades_made" in data:
+                count = int(data["trades_made"])
+        count += 1
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "w") as f:
+            json.dump({"trades_made": count}, f, indent=2)
+        config.secure_file(path)
+    except (OSError, json.JSONDecodeError, TypeError) as e:
+        logger.debug("Could not update trades count: %s", e)
 
 
 def _round_down_usd(amount: Decimal) -> Decimal:
@@ -51,6 +71,7 @@ def run(
             logger.info("Placing post-only limit buy for %s USD.", usd_available)
             client.limit_buy_usd_post_only(usd_available)
             _last_order_time = now
+            _increment_trades_made()
         except Exception as e:
             logger.exception("Buy failed: %s", e)
             _last_order_time = now  # cooldown before retry to avoid hammering API
@@ -70,6 +91,7 @@ def run(
             logger.info("Placing post-only limit sell for %s DOGE.", doge_available)
             client.limit_sell_doge_post_only(doge_available)
             _last_order_time = now
+            _increment_trades_made()
         except Exception as e:
             logger.exception("Sell failed: %s", e)
             _last_order_time = now  # cooldown before retry to avoid hammering API

@@ -117,6 +117,14 @@ def _write_status(
     if backtest_granularity is not None:
         payload["backtest_granularity"] = backtest_granularity
     try:
+        if config.TRADES_COUNT_FILE.exists():
+            with open(config.TRADES_COUNT_FILE) as f:
+                tc = json.load(f)
+            if isinstance(tc, dict) and "trades_made" in tc:
+                payload["trades_made"] = int(tc["trades_made"])
+    except (OSError, json.JSONDecodeError, TypeError):
+        pass
+    try:
         config.STATUS_FILE.parent.mkdir(parents=True, exist_ok=True)
         tmp = config.STATUS_FILE.with_suffix(config.STATUS_FILE.suffix + ".tmp")
         with open(tmp, "w") as f:

@@ -39,6 +39,7 @@ def _read_status() -> dict:
         "backtest_trades": None,
         "backtest_days": None,
         "backtest_granularity": None,
+        "trades_made": 0,
     }
     if not config.STATUS_FILE.exists():
         return default
@@ -102,11 +103,13 @@ def _make_display(s: dict, countdown_sec: int | None):
 
     cd = f"many seconds {countdown_sec}" if countdown_sec is not None else "Waiting..."
     mode = "[dim]such dry run. no order. wow.[/]" if s.get("dry_run") else "[green]very live. much trade.[/]" if s.get("allow_live") else "[dim]live off. such safe.[/]"
+    trades_made = s.get("trades_made")
+    trades_str = f"  ·  [dim]trades made: {trades_made}[/]" if trades_made is not None else ""
 
     content = Group(
         Panel(title, border_style="yellow"),
         Panel(table, title="[bold]Stats[/]", border_style="yellow"),
-        Text.from_markup(f"  [dim]{cd}[/]  ·  {mode}"),
+        Text.from_markup(f"  [dim]{cd}[/]  ·  {mode}{trades_str}"),
     )
     return content
 
@@ -247,8 +250,10 @@ def run_gui(shutdown_event) -> None:
     root.title("Doge. Such Trade. Wow.")
     root.minsize(520, 720)
     root.resizable(True, True)
-    root.configure(bg="#fffbf0", padx=24, pady=24)
-    bg, card_bg = "#fffbf0", "#f0e6d0"
+    root.configure(bg="#fffbf0", padx=24, pady=20)
+    bg = "#fffbf0"
+    card_bg = "#f0e6d0"
+    border = "#d4c4a0"  # subtle warm border for polish
 
     # Full-window coin layer (behind everything): coins fall from top, full width, with depth
     coin_canvas = tk.Canvas(root, bg=bg, highlightthickness=0)
@@ -274,13 +279,13 @@ def run_gui(shutdown_event) -> None:
         font_label = tkfont.Font(family="Helvetica", size=12)
         font_party = tkfont.Font(family="Helvetica", size=20, weight="bold")
 
-    # Shared palette and spacing so the whole UI feels blended
+    # Shared palette and spacing
     fg_primary = "#3d2914"
     fg_accent = "#c9a227"
     fg_muted = "#8b7355"
     fg_success = "#2d8a3e"
     fg_danger = "#c0392b"
-    pad_sm, pad_md, pad_lg = 4, 10, 16
+    pad_sm, pad_md, pad_lg = 6, 12, 18
 
     # Style progress bars to match the warm theme
     style = ttk.Style()
@@ -318,31 +323,41 @@ def run_gui(shutdown_event) -> None:
     stat_keys = ("doge", "usd", "gain", "move", "price")
     stat_labels = {}
     for col, (name, key) in enumerate(zip(stat_names, stat_keys)):
-        f = tk.Frame(stats_f, bg=card_bg, relief=tk.FLAT, borderwidth=0, padx=pad_md, pady=pad_md)
-        f.grid(row=0, column=col, padx=6, sticky="nsew")
+        f = tk.Frame(stats_f, bg=card_bg, highlightbackground=border, highlightthickness=1, padx=pad_md, pady=pad_md)
+        f.grid(row=0, column=col, padx=5, pady=0, sticky="nsew")
         tk.Label(f, text=name, font=font_label, bg=card_bg, fg=fg_muted).pack()
         lbl = tk.Label(f, text="—", font=font_stat, bg=card_bg, fg=fg_primary)
         lbl.pack()
         stat_labels[key] = lbl
-    extra_names = ("peak portfolio", "days tracked", "avg daily %", "USD daily", "24h change")
-    extra_keys = ("peak", "days", "avg_daily", "usd_daily", "change_24h")
+    extra_names = ("peak portfolio", "days tracked", "avg daily %", "USD daily", "24h change", "trades made")
+    extra_keys = ("peak", "days", "avg_daily", "usd_daily", "change_24h", "trades_made")
+    stats_f.columnconfigure(5, weight=1)
     for col, (name, key) in enumerate(zip(extra_names, extra_keys)):
-        f = tk.Frame(stats_f, bg=card_bg, relief=tk.FLAT, borderwidth=0, padx=pad_md, pady=pad_md)
-        f.grid(row=1, column=col, padx=6, pady=(6, 0), sticky="nsew")
+        f = tk.Frame(stats_f, bg=card_bg, highlightbackground=border, highlightthickness=1, padx=pad_md, pady=pad_md)
+        f.grid(row=1, column=col, padx=5, pady=(6, 0), sticky="nsew")
         tk.Label(f, text=name, font=font_label, bg=card_bg, fg=fg_muted).pack()
         lbl = tk.Label(f, text="—", font=font_stat, bg=card_bg, fg=fg_primary)
         lbl.pack()
         stat_labels[key] = lbl
 
+    # Strategy & timers: one bordered section for visual grouping
     bars_f = tk.Frame(root, bg=bg)
     bars_f.pack(fill=tk.X, pady=(pad_md, 0))
-    tk.Label(bars_f, text="very RSI", font=font_label, bg=bg, fg=fg_muted).pack(anchor=tk.W, pady=(0, 2))
-    rsi_bar = ttk.Progressbar(bars_f, length=400, mode="determinate", maximum=100, style="Warm.Horizontal.TProgressbar")
-    rsi_bar.pack(fill=tk.X, pady=(0, 2))
-    rsi_value_label = tk.Label(bars_f, text="—", font=font_label, bg=bg, fg=fg_primary)
-    rsi_value_label.pack(anchor=tk.W, pady=(0, 2))
-    rsi_zone_label = tk.Label(bars_f, text="—", font=font_label, bg=bg, fg=fg_muted)
-    rsi_zone_label.pack(anchor=tk.W, pady=(0, pad_lg))
+    strategy_f = tk.Frame(bars_f, bg=card_bg, highlightbackground=border, highlightthickness=1, padx=pad_md, pady=pad_md)
+    strategy_f.pack(fill=tk.X, pady=(0, pad_md))
+    tk.Label(strategy_f, text="very RSI", font=font_label, bg=card_bg, fg=fg_muted).pack(anchor=tk.W, pady=(0, 2))
+    rsi_row = tk.Frame(strategy_f, bg=card_bg)
+    rsi_row.pack(fill=tk.X, pady=(0, 2))
+    rsi_bar = ttk.Progressbar(rsi_row, length=380, mode="determinate", maximum=100, style="Warm.Horizontal.TProgressbar")
+    rsi_bar.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 8))
+    rsi_value_label = tk.Label(rsi_row, text="—", font=font_label, bg=card_bg, fg=fg_primary)
+    rsi_value_label.pack(side=tk.LEFT)
+    rsi_zone_label = tk.Label(strategy_f, text="—", font=font_label, bg=card_bg, fg=fg_muted)
+    rsi_zone_label.pack(anchor=tk.W, pady=(0, 4))
+    backtest_result_label = tk.Label(strategy_f, text="", font=font_label, bg=card_bg, fg=fg_muted)
+    backtest_result_label.pack(anchor=tk.W)
+    backtest_basis_label = tk.Label(strategy_f, text="", font=font_label, bg=card_bg, fg=fg_muted)
+    backtest_basis_label.pack(anchor=tk.W)
 
     tk.Label(bars_f, text="many seconds until next check", font=font_label, bg=bg, fg=fg_muted).pack(anchor=tk.W, pady=(pad_sm, 2))
     next_bar = ttk.Progressbar(bars_f, length=400, mode="determinate", maximum=100, style="Warm.Horizontal.TProgressbar")
@@ -354,11 +369,7 @@ def run_gui(shutdown_event) -> None:
     learn_bar = ttk.Progressbar(bars_f, length=400, mode="determinate", maximum=100, style="Warm.Horizontal.TProgressbar")
     learn_bar.pack(fill=tk.X, pady=(0, 2))
     learn_value_label = tk.Label(bars_f, text="—", font=font_label, bg=bg, fg=fg_primary)
-    learn_value_label.pack(anchor=tk.W, pady=(0, 2))
-    backtest_result_label = tk.Label(bars_f, text="", font=font_label, bg=bg, fg=fg_muted)
-    backtest_result_label.pack(anchor=tk.W, pady=(0, 2))
-    backtest_basis_label = tk.Label(bars_f, text="", font=font_label, bg=bg, fg=fg_muted)
-    backtest_basis_label.pack(anchor=tk.W, pady=(0, pad_lg))
+    learn_value_label.pack(anchor=tk.W, pady=(0, pad_lg))
 
     # Coin rain + party mode: more coins when party is on, floating popups, more phrases
     import random
@@ -460,7 +471,7 @@ def run_gui(shutdown_event) -> None:
         c.create_rectangle(x1 + r, y1, x2 - r, y2, fill=fill, outline=fill)
         c.create_rectangle(x1, y1 + r, x2, y2 - r, fill=fill, outline=fill)
 
-    draw_rounded_rect(btn_canvas, 4, 4, 316, 52, 14, "#e6b800", "#8b6914", 3)
+    draw_rounded_rect(btn_canvas, 4, 4, 316, 52, 14, "#e6b800", border, 2)
     btn_canvas.create_text(160, 28, text="Much click. Wow coins.", font=font_stat, fill=fg_primary)
     def on_coin_click(e):
         spawn_coin()
@@ -551,6 +562,8 @@ def run_gui(shutdown_event) -> None:
             _set_label(stat_labels["change_24h"], change_text, fg_success if ch > 0 else fg_danger if ch < 0 else fg_primary)
         else:
             _set_label(stat_labels["change_24h"], "—", fg_primary)
+        trades_made_val = s.get("trades_made")
+        _set_label(stat_labels["trades_made"], str(trades_made_val) if trades_made_val is not None else "0")
 
         if rsi_val is not None:
             rsi_v = min(100, max(0, float(rsi_val)))
