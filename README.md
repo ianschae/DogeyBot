@@ -1,6 +1,6 @@
 # Doge Trading Bot
 
-A simple Dogecoin (DOGE-USD) trading bot for **Coinbase Advanced Trade**. It uses RSI mean-reversion on a **learned timeframe**, places **post-only limit orders** (maker only, to avoid fees), and trades only with the balance already in your account—no external capital or transfers.
+A simple Dogecoin (DOGE-USD) trading bot for **Coinbase Advanced Trade**. It uses RSI mean-reversion on a **learned timeframe**, places **post-only limit orders** (maker only, to avoid fees), and trades only with the balance already in your account—no external capital or transfers. Put simply: it finds the most profitable params from the past and uses them until the next re-learn.
 
 ---
 
