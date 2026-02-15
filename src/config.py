@@ -88,7 +88,6 @@ LEARN_FEE_PCT = _float_env("LEARN_FEE_PCT", 0.6)
 # Optional: GUI (doge-game window; tkinter)
 UI_ENABLED = os.environ.get("UI_ENABLED", "true").strip().lower() in ("true", "1", "yes")
 STATUS_FILE = Path(__file__).resolve().parent.parent / "status.json"
-TRADES_COUNT_FILE = STATUS_FILE.parent / "trades_count.json"
 
 
 def secure_file(path: Path) -> None:

@@ -39,7 +39,6 @@ def _read_status() -> dict:
         "backtest_trades": None,
         "backtest_days": None,
         "backtest_granularity": None,
-        "trades_made": 0,
     }
     if not config.STATUS_FILE.exists():
         return default
@@ -103,13 +102,11 @@ def _make_display(s: dict, countdown_sec: int | None):
 
     cd = f"many seconds {countdown_sec}" if countdown_sec is not None else "Waiting..."
     mode = "[dim]such dry run. no order. wow.[/]" if s.get("dry_run") else "[green]very live. much trade.[/]" if s.get("allow_live") else "[dim]live off. such safe.[/]"
-    trades_made = s.get("trades_made")
-    trades_str = f"  ·  [dim]trades made: {trades_made}[/]" if trades_made is not None else ""
 
     content = Group(
         Panel(title, border_style="yellow"),
         Panel(table, title="[bold]Stats[/]", border_style="yellow"),
-        Text.from_markup(f"  [dim]{cd}[/]  ·  {mode}{trades_str}"),
+        Text.from_markup(f"  [dim]{cd}[/]  ·  {mode}"),
     )
     return content
 
@@ -329,9 +326,8 @@ def run_gui(shutdown_event) -> None:
         lbl = tk.Label(f, text="—", font=font_stat, bg=card_bg, fg=fg_primary)
         lbl.pack()
         stat_labels[key] = lbl
-    extra_names = ("peak portfolio", "days tracked", "avg daily %", "USD daily", "24h change", "trades made")
-    extra_keys = ("peak", "days", "avg_daily", "usd_daily", "change_24h", "trades_made")
-    stats_f.columnconfigure(5, weight=1)
+    extra_names = ("peak portfolio", "days tracked", "avg daily %", "USD daily", "24h change")
+    extra_keys = ("peak", "days", "avg_daily", "usd_daily", "change_24h")
     for col, (name, key) in enumerate(zip(extra_names, extra_keys)):
         f = tk.Frame(stats_f, bg=card_bg, highlightbackground=border, highlightthickness=1, padx=pad_md, pady=pad_md)
         f.grid(row=1, column=col, padx=5, pady=(6, 0), sticky="nsew")
@@ -562,8 +558,6 @@ def run_gui(shutdown_event) -> None:
             _set_label(stat_labels["change_24h"], change_text, fg_success if ch > 0 else fg_danger if ch < 0 else fg_primary)
         else:
             _set_label(stat_labels["change_24h"], "—", fg_primary)
-        trades_made_val = s.get("trades_made")
-        _set_label(stat_labels["trades_made"], str(trades_made_val) if trades_made_val is not None else "0")
 
         if rsi_val is not None:
             rsi_v = min(100, max(0, float(rsi_val)))
