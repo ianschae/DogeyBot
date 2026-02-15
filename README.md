@@ -173,7 +173,7 @@ Set `UI_ENABLED=false` in `.env` to run without the window (e.g. headless server
 
 ## Running as an app (macOS)
 
-Double-click **Doge.app** in the project folder to run the bot without a terminal. The app uses your project’s `.venv` and `.env`; close the Doge window to quit. You can drag `Doge.app` to the Dock or Applications for quick access.
+Double-click **Doge.app** in the project folder to run the bot without a terminal. The app uses your project’s `.venv` and `.env`; close the Doge window to quit. You can drag `Doge.app` to the Dock or Applications for quick access. The app icon is built from `src/assets/dogecoin.png`; to rebuild it after changing that image, run `python scripts/build_app_icon.py` (from the repo root, with the venv activated).
 
 ---
 
