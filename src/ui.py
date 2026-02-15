@@ -541,7 +541,7 @@ def run_gui(shutdown_event) -> None:
         avg_val = s.get("avg_daily_gain_pct") or 0
         usd_daily_val = s.get("avg_daily_gain_usd") or 0
         _set_label(stat_labels["peak"], f"${fmt(peak_val)}")
-        _set_label(stat_labels["days"], fmt(days_val))
+        _set_label(stat_labels["days"], str(int(days_val)))
         _set_label(stat_labels["avg_daily"], f"{fmt(avg_val)}%", fg_success if avg_val > 0 else fg_danger if avg_val < 0 else fg_primary)
         _set_label(stat_labels["usd_daily"], f"${fmt(usd_daily_val)}", fg_success if usd_daily_val > 0 else fg_danger if usd_daily_val < 0 else fg_primary)
         ch = s.get("change_24h_pct")

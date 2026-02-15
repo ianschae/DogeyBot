@@ -77,16 +77,16 @@ def record(doge: float, usd: float, price: float) -> tuple[float, float, float, 
     gain_pct = (100.0 * gain_usd / initial) if initial else 0.0
     drawdown_usd = peak - portfolio_value
     drawdown_pct = (100.0 * drawdown_usd / peak) if peak else 0.0
-    days_tracked = 0.0
+    days_tracked = 0  # full days only
     if started_at:
         try:
             then = datetime.fromisoformat(started_at.replace("Z", "+00:00"))
             delta = datetime.now(timezone.utc) - then.replace(tzinfo=timezone.utc)
-            days_tracked = max(0.0, delta.total_seconds() / 86400.0)
+            days_tracked = max(0, int(delta.total_seconds() / 86400))
         except (ValueError, TypeError):
             pass
-    avg_daily_gain_pct = (gain_pct / days_tracked) if days_tracked >= 1.0 else gain_pct
-    avg_daily_gain_usd = (gain_usd / days_tracked) if days_tracked >= 1.0 else gain_usd
+    avg_daily_gain_pct = (gain_pct / days_tracked) if days_tracked >= 1 else gain_pct
+    avg_daily_gain_usd = (gain_usd / days_tracked) if days_tracked >= 1 else gain_usd
     now = datetime.now(timezone.utc).isoformat()
     write_header = not LOG_FILE.exists()
     LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
