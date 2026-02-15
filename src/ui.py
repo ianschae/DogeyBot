@@ -7,6 +7,19 @@ from . import config
 
 ASSETS_DIR = Path(__file__).resolve().parent / "assets"
 
+# Backtest uses 350 candles; days covered depends on granularity (so trades/month is consistent with "350 days" etc.)
+_CANDLES_350_DAYS = {
+    "ONE_MINUTE": 350 * 60 / 86400,
+    "FIVE_MINUTE": 350 * (5 * 60) / 86400,
+    "FIFTEEN_MINUTE": 350 * (15 * 60) / 86400,
+    "THIRTY_MINUTE": 350 * (30 * 60) / 86400,
+    "ONE_HOUR": 350 * 3600 / 86400,
+    "TWO_HOUR": 350 * (2 * 3600) / 86400,
+    "FOUR_HOUR": 350 * (4 * 3600) / 86400,
+    "SIX_HOUR": 350 * (6 * 3600) / 86400,
+    "ONE_DAY": 350.0,
+}
+
 
 def _read_status() -> dict:
     """Read status.json; return defaults if missing or invalid."""
@@ -576,7 +589,12 @@ def run_gui(shutdown_event) -> None:
         bt_trades = s.get("backtest_trades")
         bt_days = s.get("backtest_days")
         if bt_ret is not None and bt_trades is not None:
-            freq = f" (~{(bt_trades / bt_days) * 30:.1f}/month)" if bt_days and bt_days > 0 else ""
+            # Use actual backtest span (350 candles in days for this granularity), not LEARN_DAYS
+            backtest_days = _CANDLES_350_DAYS.get(bt_gran) if bt_gran else bt_days
+            if backtest_days and backtest_days > 0:
+                freq = f" (~{(bt_trades / backtest_days) * 30:.1f}/month)"
+            else:
+                freq = ""
             explanation += f"\n\nOn the last backtest this setup would have returned {bt_ret:+.2f}% over {bt_trades} trades{freq}."
         _set_label(strategy_explanation_label, explanation)
 
