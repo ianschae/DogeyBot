@@ -12,6 +12,7 @@ A simple Dogecoin (DOGE-USD) trading bot for **Coinbase Advanced Trade**. It use
 - [Trading strategy](#trading-strategy)
 - [Learning (backtest)](#learning-backtest)
 - [Execution (orders)](#execution-orders)
+- [Gain tracking](#gain-tracking)
 - [Data and files](#data-and-files)
 - [GUI](#gui)
 - [Testing](#testing)
@@ -108,6 +109,23 @@ Hardcoded in code (no env): min order size 1 USD / 1 DOGE, RSI period 14, limit 
 - **Prices:** Buy limit = current price × (1 − 0.001); sell limit = current price × (1 + 0.001). The 0.1% offset is configurable in code (`LIMIT_OFFSET_PCT`).
 - **Behavior:** Orders are Good-til-Canceled (GTC). If the limit would immediately match (cross the spread), the exchange rejects the order (post-only). The bot does not cancel or replace open orders; it only places one order per signal and respects cooldown.
 - **Size:** Buy uses all available USD (converted to DOGE at the limit price); sell uses all available DOGE. Minimum order size (1 USD / 1 DOGE) and `ORDER_COOLDOWN_SECONDS` apply.
+
+---
+
+## Gain tracking
+
+Gain is **total return since tracking started**, not per-trade P&amp;L.
+
+- **Portfolio value** (each poll): `USD balance + DOGE balance × current DOGE-USD price`. The bot gets balances from Coinbase and values your DOGE at the current market price.
+- **Initial value:** The first time the bot runs (or when `portfolio_state.json` is missing/invalid), it saves that snapshot as the baseline. That value is stored as `initial_portfolio_value_usd` and never changed.
+- **Gain:**  
+  - **Gain (USD)** = current portfolio value − initial portfolio value.  
+  - **Gain (%)** = (gain USD / initial) × 100.  
+  So if you started at $100 and you’re at $105, gain is $5 and 5%.
+- **Peak:** The bot also stores the highest portfolio value ever seen (`peak_portfolio_value_usd`). **Drawdown** is how far you are below that peak: `(peak − current value) / peak × 100`.
+- **Days tracked:** Full calendar days since tracking started (integer). **Avg daily gain %** and **avg daily gain USD** use that full-day count in the denominator (once you have at least one full day).
+
+State is persisted in `portfolio_state.json`; each poll is appended to `portfolio_log.csv` with all of the above so you can inspect or chart history.
 
 ---
 
