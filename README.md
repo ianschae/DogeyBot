@@ -82,6 +82,18 @@ Hardcoded in code (no env): min order size 1 USD / 1 DOGE, RSI period 14, limit 
 - **Signal:** Binary. **Buy** when you are not in position and RSI &lt; **entry**. **Sell** when you are in position and RSI &gt; **exit**. Otherwise **hold**.
 - **Entry/exit:** Default 30/50. The learning step chooses the best (entry, exit) from a grid and saves them (and the best **timeframe**) in `learned_params.json`; the bot loads these on startup and after each re-learn.
 
+### Move decision
+
+The bot’s signal each poll is **buy**, **sell**, or **hold** — one of these three:
+
+| Condition | Move |
+|-----------|------|
+| Not in position **and** RSI &lt; entry | **buy** |
+| In position **and** RSI &gt; exit | **sell** |
+| Otherwise | **hold** |
+
+So: you only **buy** when you hold no (or dust) DOGE and RSI is below the learned entry threshold; you only **sell** when you hold DOGE and RSI is above the learned exit threshold. Otherwise you stay put. The same logic is used for live trading and for the backtest (`signal_from_rsi()` in `src/strategies/rsi_mean_reversion.py`).
+
 ### Timeframe
 
 - The bot does **not** use a fixed candle size. Learning tests every supported granularity (ONE_MINUTE, FIVE_MINUTE, …, ONE_DAY), pulls up to 350 candles per timeframe, and picks the **(granularity, entry, exit)** with the highest backtest return. That granularity is saved as `CANDLE_GRANULARITY`; the live bot fetches candles on that same timeframe so strategy and execution align.
