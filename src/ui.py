@@ -587,15 +587,14 @@ def run_gui(shutdown_event) -> None:
         explanation = f"{intro}\n\nRight now: {current_bit}"
         bt_ret = s.get("backtest_return_pct")
         bt_trades = s.get("backtest_trades")
-        bt_days = s.get("backtest_days")
         if bt_ret is not None and bt_trades is not None:
-            # Use actual backtest span (350 candles in days for this granularity), not LEARN_DAYS
-            backtest_days = _CANDLES_350_DAYS.get(bt_gran) if bt_gran else bt_days
+            # Trades/month only when we know the actual backtest span (350 candles for this granularity)
+            backtest_days = _CANDLES_350_DAYS.get(bt_gran) if bt_gran else None
             if backtest_days and backtest_days > 0:
                 freq = f" (~{(bt_trades / backtest_days) * 30:.1f}/month)"
             else:
                 freq = ""
-            explanation += f"\n\nOn the last backtest this setup would have returned {bt_ret:+.2f}% over {bt_trades} trades{freq}."
+            explanation += f"\n\nOver that same 350-candle period, this setup would have returned {bt_ret:+.2f}% in {bt_trades} trades{freq}."
         _set_label(strategy_explanation_label, explanation)
 
         learn_cd = _countdown_learn_sec(s)
